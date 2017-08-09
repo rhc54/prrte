@@ -1,0 +1,140 @@
+#
+# Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2005 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2009 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
+# Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+
+# Note that the -I directory must *exactly* match what was specified
+# via AC_CONFIG_MACRO_DIR in configure.ac.
+ACLOCAL_AMFLAGS = -I ./config
+
+headers =
+sources =
+nodist_headers =
+EXTRA_DIST =
+
+# Only install the valgrind suppressions file if we're building in
+# standalone mode
+dist_pmixdata_DATA =
+if ! PMIX_EMBEDDED_MODE
+dist_pmixdata_DATA += contrib/pmix-valgrind.supp
+
+
+man_MANS = \
+        man/man3/pmix_init.3 \
+        man/man3/pmix_finalize.3 \
+        man/man3/pmix_initialized.3 \
+        man/man3/pmix_abort.3 \
+        man/man3/pmix_put.3 \
+        man/man3/pmix_commit.3 \
+        man/man3/pmix_fence.3 \
+        man/man3/pmix_get.3 \
+        man/man7/pmix.7 \
+        man/man7/pmix_constants.7
+endif
+
+include config/Makefile.am
+include include/Makefile.am
+include src/class/Makefile.am
+include src/include/Makefile.am
+include src/buffer_ops/Makefile.am
+include src/util/Makefile.am
+include src/usock/Makefile.am
+include src/client/Makefile.am
+include src/server/Makefile.am
+include src/sec/Makefile.am
+include src/common/Makefile.am
+
+include src/atomics/asm/Makefile.am
+include src/atomics/sys/Makefile.include
+
+if WANT_DSTORE
+include src/sm/Makefile.am
+include src/dstore/Makefile.am
+endif
+
+if PMIX_EMBEDDED_MODE
+noinst_LTLIBRARIES = libpmix.la libasm.la
+libpmix_la_SOURCES = $(headers) $(sources)
+libpmix_la_LDFLAGS =
+
+else
+
+lib_LTLIBRARIES = libpmix.la libasm.la
+libpmix_la_SOURCES = $(headers) $(sources)
+libpmix_la_LDFLAGS = -version-info $(libpmix_so_version)
+SUBDIRS = . test examples src/atomics/asm
+endif
+
+# ASM Start
+if PMIX_HAVE_ASM_FILE
+nodist_libasm_la_SOURCES = src/atomics/asm/atomic-asm.S
+libasm_la_DEPENDENCIES = src/atomics/asm/generated/@PMIX_ASM_FILE@
+else
+nodist_libasm_la_SOURCES =
+libasm_la_DEPENDENCIES =
+endif
+
+dist_libasm_la_SOURCES = src/atomics/asm/asm.c
+# ASM End
+
+if WANT_INSTALL_HEADERS
+pmixdir = $(pmixincludedir)/$(subdir)
+nobase_pmix_HEADERS = $(headers)
+
+else
+
+noinst_HEADERS = $(headers)
+endif
+
+nroff:
+	@for file in $(man_MANS); do \
+	    source=`echo $$file | sed -e 's@/man[0-9]@@'`; \
+	    contrib/md2nroff.pl --source=$$source.md; \
+	done
+
+EXTRA_DIST += README INSTALL VERSION LICENSE autogen.sh \
+             config/pmix_get_version.sh $(man_MANS) \
+             contrib/platform/optimized \
+             test/test_common.h test/cli_stages.h \
+             test/server_callbacks.h test/test_fence.h \
+             test/test_publish.h test/test_resolve_peers.h \
+             test/test_spawn.h test/utils.h test/test_cd.h \
+             src/atomics/asm/asm-data.txt \
+             src/atomics/asm/generate-asm.pl \
+	src/atomics/asm/generate-all-asm.pl \
+	src/atomics/asm/base/aix.conf \
+	src/atomics/asm/base/default.conf \
+	src/atomics/asm/base/X86_64.asm \
+	src/atomics/asm/base/ARM.asm \
+	src/atomics/asm/base/IA32.asm \
+	src/atomics/asm/base/IA64.asm \
+	src/atomics/asm/base/MIPS.asm \
+	src/atomics/asm/base/POWERPC32.asm \
+	src/atomics/asm/base/POWERPC64.asm \
+	src/atomics/asm/base/SPARCV9_32.asm \
+	src/atomics/asm/base/SPARCV9_64.asm
+
+
+#
+# Copy over all the generated files
+#
+dist-hook:
+	mkdir "${distdir}/src/atomics/asm/generated"
+	$(PERL) "$(top_srcdir)/src/atomics/asm/generate-all-asm.pl" "$(PERL)" "$(srcdir)/src/atomics/asm" "$(distdir)/src/atomics/asm"
+	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PMIX_VERSION)" "$(PMIX_REPO_REV)"
