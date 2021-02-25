@@ -147,13 +147,6 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
             obj = hwloc_get_root_obj(node->topology->topo);
         }
 
-        /* add this node to the map - do it only once */
-        if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            PRTE_RETAIN(node);
-            prte_pointer_array_add(jdata->map->nodes, node);
-            ++(jdata->map->num_nodes);
-        }
         if (add_one) {
             if (0 == nxtra_nodes) {
                 --extra_procs_to_assign;
@@ -169,6 +162,28 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
             /* nodes have some room */
             num_procs_to_assign = node->slots - node->slots_inuse + extra_procs_to_assign;
         }
+
+        if (0 != node->slots_max) {
+            if (node->slots_max <= node->slots_inuse) {
+                /* cannot use this node */
+                continue;
+            }
+            if (node->slots_max < (node->slots_inuse + num_procs_to_assign)) {
+                num_procs_to_assign = node->slots_max - node->slots_inuse;
+                if (0 >= num_procs_to_assign) {
+                    continue;
+                }
+            }
+        }
+
+        /* add this node to the map - do it only once */
+        if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+            PRTE_RETAIN(node);
+            prte_pointer_array_add(jdata->map->nodes, node);
+            ++(jdata->map->num_nodes);
+        }
+
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot adding up to %d procs to node %s",
                             num_procs_to_assign, node->name);
@@ -294,13 +309,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
             if (NULL != node->topology && NULL != node->topology->topo) {
                 obj = hwloc_get_root_obj(node->topology->topo);
             }
-            /* add this node to the map, but only do so once */
-            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
-                ++(jdata->map->num_nodes);
-            }
+
             if (oversubscribed) {
                 /* compute the number of procs to go on this node */
                 if (add_one) {
@@ -313,6 +322,18 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                 }
                 /* everybody just takes their share */
                 num_procs_to_assign = navg + extra_procs_to_assign;
+                if (0 != node->slots_max) {
+                    if (node->slots_max <= node->slots_inuse) {
+                        /* cannot use this node */
+                        continue;
+                    }
+                    if (node->slots_max < (node->slots_inuse + num_procs_to_assign)) {
+                        num_procs_to_assign = node->slots_max - node->slots_inuse;
+                        if (0 >= num_procs_to_assign) {
+                            continue;
+                        }
+                    }
+                }
             } else if (node->slots <= node->slots_inuse) {
                 /* since we are not oversubcribed, ignore this node */
                 continue;
@@ -348,6 +369,13 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                                      "%s NODE %s AVG %d ASSIGN %d EXTRA %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
                                      navg, num_procs_to_assign, extra_procs_to_assign));
+            }
+            /* add this node to the map, but only do so once */
+            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+                PRTE_RETAIN(node);
+                prte_pointer_array_add(jdata->map->nodes, node);
+                ++(jdata->map->num_nodes);
             }
             nnodes++; // track how many nodes remain available
             PRTE_OUTPUT_VERBOSE((20, prte_rmaps_base_framework.framework_output,
@@ -555,6 +583,12 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                                 "mca:rmaps:rr: calculated nprocs %d", nprocs);
             if (nprocs < 1) {
                 if (second_pass) {
+                    if (0 != node->slots_max) {
+                        if (node->slots_max <= (node->slots_inuse + 1)) {
+                            /* cannot use this node */
+                            continue;
+                        }
+                    }
                     /* already checked for oversubscription permission, so at least put
                      * one proc on it
                      */
@@ -564,6 +598,12 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                      */
                     start = node->num_procs % nobjs;
                 } else {
+                    continue;
+                }
+            } else if (0 != node->slots_max && (node->slots_inuse + nprocs) > node->slots_max) {
+                nprocs = node->slots_max - node->slots_inuse;
+                if (0 >= nprocs) {
+                    /* cannot use this node */
                     continue;
                 }
             }
@@ -862,6 +902,15 @@ static int byobj_span(prte_job_t *jdata,
             if (0 < nxtra_objs) {
                 nprocs++;
                 nxtra_objs--;
+            }
+            if (0 != node->slots_max) {
+                if (node->slots_max <= (node->slots_inuse + nprocs)) {
+                    nprocs = node->slots_max - node->slots_inuse;
+                    if (0 >= nprocs) {
+                        /* cannot use this node */
+                        continue;
+                    }
+                }
             }
             /* map the reqd number of procs */
             for (j=0; j < nprocs && nprocs_mapped < app->num_procs; j++) {

@@ -434,7 +434,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                 }
             }
             /** check to see if this node is fully used - remove if so */
-            if (0 != node->slots_max && node->slots_inuse > node->slots_max) {
+            if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
                 PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s: max %d inuse %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
