@@ -248,6 +248,293 @@ static char *append_filename_to_list(const char *filename)
     return NULL;
 }
 
+static int fixup_files(char **file_list, char * path, bool rel_path_search, char sep) {
+    int exit_status = PRTE_SUCCESS;
+    char **files = NULL;
+    char **search_path = NULL;
+    char * tmp_file = NULL;
+    char **argv = NULL;
+    char *rel_path;
+    int mode = R_OK; /* The file exists, and we can read it */
+    int count, i, argc = 0;
+
+    search_path = prte_argv_split(path, PRTE_ENV_SEP);
+    files = prte_argv_split(*file_list, sep);
+    count = prte_argv_count(files);
+
+    rel_path = force_agg_path ? force_agg_path : cwd;
+
+    /* Read in reverse order, so we can preserve the original ordering */
+    for (i = 0 ; i < count; ++i) {
+        char *msg_path = path;
+        if (prte_path_is_absolute(files[i])) {
+            /* Absolute paths preserved */
+            tmp_file = prte_path_access(files[i], NULL, mode);
+        } else if (!rel_path_search && NULL != strchr(files[i], PRTE_PATH_SEP[0])) {
+            /* Resolve all relative paths:
+             *  - If filename contains a "/" (e.g., "./foo" or "foo/bar")
+             *    - look for it relative to cwd
+             *    - if exists, use it
+             *    - ow warn/error
+             */
+            msg_path = rel_path;
+            tmp_file = prte_path_access(files[i], rel_path, mode);
+        } else {
+            /* Resolve all relative paths:
+             * - Use path resolution
+             *    - if found and readable, use it
+             *    - otherwise, warn/error
+             */
+            tmp_file = prte_path_find (files[i], search_path, mode, NULL);
+        }
+
+        if (NULL == tmp_file) {
+            prte_show_help("help-prte-mca-var.txt", "missing-param-file",
+                           true, getpid(), files[i], msg_path);
+            exit_status = PRTE_ERROR;
+            break;
+        }
+
+        prte_argv_append(&argc, &argv, tmp_file);
+
+        free(tmp_file);
+        tmp_file = NULL;
+    }
+
+    if (PRTE_SUCCESS == exit_status) {
+        free(*file_list);
+        *file_list = prte_argv_join(argv, sep);
+    }
+
+    if( NULL != files ) {
+        prte_argv_free(files);
+        files = NULL;
+    }
+
+    if( NULL != argv ) {
+        prte_argv_free(argv);
+        argv = NULL;
+    }
+
+    if( NULL != search_path ) {
+        prte_argv_free(search_path);
+        search_path = NULL;
+    }
+
+    return exit_status;
+}
+
+static void resolve_relative_paths(char **file_prefix, char *file_path, bool rel_path_search, char **files, char sep)
+{
+    char *tmp_str;
+    /*
+     * Resolve all relative paths.
+     * the file list returned will contain only absolute paths
+     */
+    if( PRTE_SUCCESS != fixup_files(file_prefix, file_path, rel_path_search, sep) ) {
+#if 0
+        /* JJH We need to die! */
+        abort();
+#else
+        ;
+#endif
+    }
+    else {
+        /* Prepend the files to the search list */
+        if (0 > asprintf(&tmp_str, "%s%c%s", *file_prefix, sep, *files)) {
+            prte_output(0, "OUT OF MEM");
+            free(*files);
+            free(tmp_str);
+            *files = NULL;
+            return;
+        }
+        free (*files);
+        *files = tmp_str;
+    }
+}
+
+static int read_files(char *file_list, prte_list_t *file_values, char sep)
+{
+    char **tmp = prte_argv_split(file_list, sep);
+    int i, count;
+
+    if (!tmp) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    count = prte_argv_count(tmp);
+
+    /* Iterate through all the files passed in -- read them in reverse
+     order so that we preserve unix/shell path-like semantics (i.e.,
+     the entries farthest to the left get precedence) */
+
+    for (i = count - 1; i >= 0; --i) {
+        char *file_name = append_filename_to_list (tmp[i]);
+        prte_mca_base_parse_paramfile(file_name, file_values);
+    }
+
+    prte_argv_free (tmp);
+
+    prte_mca_base_internal_env_store();
+
+    return PRTE_SUCCESS;
+}
+
+static int cache_files(bool rel_path_search)
+{
+    char *tmp;
+    int ret;
+
+    /* We may need this later */
+    home = (char*)prte_home_directory(geteuid());
+
+    if (NULL == cwd) {
+        cwd = (char *) malloc(sizeof(char) * MAXPATHLEN);
+        if (NULL == (cwd = getcwd(cwd, MAXPATHLEN))) {
+            prte_output(0, "Error: Unable to get the current working directory\n");
+            cwd = strdup(".");
+        }
+    }
+
+#if PRTE_WANT_HOME_CONFIG_FILES
+    ret = asprintf(&prte_mca_base_var_files, "%s"PRTE_PATH_SEP".prte" PRTE_PATH_SEP
+                   "mca-params.conf%c%s" PRTE_PATH_SEP "prte-mca-params.conf",
+                   home, ',', prte_pinstall_dirs.sysconfdir);
+#else
+    ret = asprintf(&prte_mca_base_var_files, "%s" PRTE_PATH_SEP "prte-mca-params.conf",
+                   prte_pinstall_dirs.sysconfdir);
+#endif
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* Initialize a parameter that says where MCA param files can be found.
+     We may change this value so set the scope to PRTE_MCA_BASE_VAR_SCOPE_READONLY */
+    tmp = prte_mca_base_var_files;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_files", "Path for MCA "
+                                      "configuration files containing variable values",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_files);
+    free (tmp);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    prte_mca_base_envar_files = strdup(prte_mca_base_var_files);
+
+    (void) prte_mca_base_var_register_synonym (ret, "prte", "mca", NULL, "param_files",
+                                               PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+
+    ret = asprintf(&prte_mca_base_var_override_file, "%s" PRTE_PATH_SEP "prte-mca-params-override.conf",
+                   prte_pinstall_dirs.sysconfdir);
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    tmp = prte_mca_base_var_override_file;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "override_param_file",
+                                      "Variables set in this file will override any value set in"
+                                      "the environment or another configuration file",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
+                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
+                                      &prte_mca_base_var_override_file);
+    free (tmp);
+    if (0 > ret) {
+        return ret;
+    }
+
+    /* Disable reading MCA parameter files. */
+    if (0 == strcmp (prte_mca_base_var_files, "none")) {
+        return PRTE_SUCCESS;
+    }
+
+    prte_mca_base_var_suppress_override_warning = false;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "suppress_override_warning",
+                                      "Suppress warnings when attempting to set an overridden value (default: false)",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                      PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_mca_base_var_suppress_override_warning);
+    if (0 > ret) {
+        return ret;
+    }
+
+    /* Aggregate MCA parameter files
+     * A prefix search path to look up aggregate MCA parameter file
+     * requests that do not specify an absolute path
+     */
+    prte_mca_base_var_file_prefix = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_prefix",
+                                      "Aggregate MCA parameter file sets",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_file_prefix);
+    if (0 > ret) {
+        return ret;
+    }
+
+    prte_mca_base_envar_file_prefix = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "envar_file_prefix",
+                                      "Aggregate MCA parameter file set for env variables",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_envar_file_prefix);
+    if (0 > ret) {
+        return ret;
+    }
+
+    ret = asprintf(&prte_mca_base_param_file_path, "%s" PRTE_PATH_SEP "amca-param-sets%c%s",
+                   prte_pinstall_dirs.prtedatadir, PRTE_ENV_SEP, cwd);
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    tmp = prte_mca_base_param_file_path;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path",
+                                      "Aggregate MCA parameter Search path",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_param_file_path);
+    free (tmp);
+    if (0 > ret) {
+        return ret;
+    }
+
+    force_agg_path = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path_force",
+                                      "Forced Aggregate MCA parameter Search path",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &force_agg_path);
+    if (0 > ret) {
+        return ret;
+    }
+
+    if (NULL != force_agg_path) {
+        if (NULL != prte_mca_base_param_file_path) {
+            char *tmp_str = prte_mca_base_param_file_path;
+
+            ret = asprintf(&prte_mca_base_param_file_path, "%s%c%s", force_agg_path, PRTE_ENV_SEP, tmp_str);
+            free(tmp_str);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+        } else {
+            prte_mca_base_param_file_path = strdup(force_agg_path);
+        }
+    }
+
+    if (NULL != prte_mca_base_var_file_prefix) {
+        resolve_relative_paths(&prte_mca_base_var_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_var_files, PRTE_ENV_SEP);
+    }
+    read_files (prte_mca_base_var_files, &prte_mca_base_var_file_values, ',');
+
+    if (NULL != prte_mca_base_envar_file_prefix) {
+        resolve_relative_paths(&prte_mca_base_envar_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_envar_files, ',');
+    }
+    read_files (prte_mca_base_envar_files, &prte_mca_base_envar_file_values, ',');
+
+    if (0 == access(prte_mca_base_var_override_file, F_OK)) {
+        read_files (prte_mca_base_var_override_file, &prte_mca_base_var_override_values, PRTE_ENV_SEP);
+    }
+
+    return PRTE_SUCCESS;
+}
+
 /*
  * Set it up
  */

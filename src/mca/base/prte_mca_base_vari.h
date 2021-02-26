@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -148,6 +149,9 @@ PRTE_EXPORT int prte_mca_base_var_generate_full_name4 (const char *project, cons
  */
 PRTE_EXPORT int prte_mca_base_var_group_init (void);
 PRTE_EXPORT int prte_mca_base_var_group_finalize (void);
+
+PRTE_EXPORT int prte_mca_base_parse_paramfile(const char *paramfile,
+                                              prte_list_t *list);
 
 END_C_DECLS
 
