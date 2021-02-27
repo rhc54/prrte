@@ -10,16 +10,12 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2012-2018 Los Alamos National Security, LLC. All rights
+ * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- * Copyright (c) 2018      Triad National Security, LLC. All rights
- *                         reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -48,27 +44,32 @@
 #include "src/util/show_help.h"
 #include "src/util/printf.h"
 #include "src/util/argv.h"
+#include "src/util/error.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/prte_mca_base_vari.h"
-#include "src/mca/base/prte_mca_base_alias.h"
-#include "constants.h"
 #include "src/util/output.h"
 #include "src/util/prte_environ.h"
-#include "src/runtime/runtime.h"
 
 /*
  * local variables
  */
 static prte_pointer_array_t prte_mca_base_vars;
-static const char *prte_mca_prefix = PRTE_MCA_PREFIX;
+static const char *mca_prefix = "PRTE_MCA_";
 static char *home = NULL;
+static char *cwd  = NULL;
 bool prte_mca_base_var_initialized = false;
+static char * force_agg_path = NULL;
+static char *prte_mca_base_var_files = NULL;
 static char *prte_mca_base_envar_files = NULL;
 static char **prte_mca_base_var_file_list = NULL;
 static char *prte_mca_base_var_override_file = NULL;
-char *prte_mca_base_env_list = NULL;
-char *prte_mca_base_env_list_sep = PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
-char *prte_mca_base_env_list_internal = NULL;
+static char *prte_mca_base_var_file_prefix = NULL;
+static char *prte_mca_base_envar_file_prefix = NULL;
+static char *prte_mca_base_param_file_path = NULL;
+static char *prte_mca_base_env_list = NULL;
+#define PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT ";"
+static char *prte_mca_base_env_list_sep = PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
+static char *prte_mca_base_env_list_internal = NULL;
 static bool prte_mca_base_var_suppress_override_warning = false;
 static prte_list_t prte_mca_base_var_file_values;
 static prte_list_t prte_mca_base_envar_file_values;
@@ -78,10 +79,10 @@ static int prte_mca_base_var_count = 0;
 
 static prte_hash_table_t prte_mca_base_var_index_hash;
 
-#define PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(mbv_enumerator) {   \
-    if(mbv_enumerator && !mbv_enumerator->enum_is_static) {  \
-        PRTE_RELEASE(mbv_enumerator);                        \
-    }                                                        \
+#define PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(mbv_enumerator) {  \
+if(mbv_enumerator && !mbv_enumerator->enum_is_static) { \
+PRTE_RELEASE(mbv_enumerator);                       \
+}                                                       \
 }
 
 const char *prte_var_type_names[] = {
@@ -93,12 +94,7 @@ const char *prte_var_type_names[] = {
     "string",
     "version_string",
     "bool",
-    "double",
-    "long",
-    "int32_t",
-    "uint32_t",
-    "int64_t",
-    "uint64_t",
+    "double"
 };
 
 const size_t prte_var_type_sizes[] = {
@@ -110,15 +106,10 @@ const size_t prte_var_type_sizes[] = {
     sizeof (char),
     sizeof (char),
     sizeof (bool),
-    sizeof (double),
-    sizeof (long),
-    sizeof (int32_t),
-    sizeof (uint32_t),
-    sizeof (int64_t),
-    sizeof (uint64_t),
+    sizeof (double)
 };
 
-static const char *prte_var_source_names[] = {
+const char *prte_var_source_names[] = {
     "default",
     "command line",
     "environment",
@@ -128,7 +119,7 @@ static const char *prte_var_source_names[] = {
 };
 
 
-static const char *prte_info_lvl_strings[] = {
+static const char *info_lvl_strings[] = {
     "user/basic",
     "user/detail",
     "user/all",
@@ -143,6 +134,8 @@ static const char *prte_info_lvl_strings[] = {
 /*
  * local functions
  */
+static int fixup_files(char **file_list, char * path, bool rel_path_search, char sep);
+static int read_files (char *file_list, prte_list_t *file_values, char sep);
 static int var_set_initial (prte_mca_base_var_t *var, prte_mca_base_var_t *original);
 static int var_get (int vari, prte_mca_base_var_t **var_out, bool original);
 static int var_value_string (prte_mca_base_var_t *var, char **value_string);
@@ -153,12 +146,12 @@ static int var_value_string (prte_mca_base_var_t *var, char **value_string);
 static void var_constructor (prte_mca_base_var_t *p);
 static void var_destructor (prte_mca_base_var_t *p);
 PRTE_CLASS_INSTANCE(prte_mca_base_var_t, prte_object_t,
-                   var_constructor, var_destructor);
+                    var_constructor, var_destructor);
 
 static void fv_constructor (prte_mca_base_var_file_value_t *p);
 static void fv_destructor (prte_mca_base_var_file_value_t *p);
 PRTE_CLASS_INSTANCE(prte_mca_base_var_file_value_t, prte_list_item_t,
-                   fv_constructor, fv_destructor);
+                    fv_constructor, fv_destructor);
 
 static const char *prte_mca_base_var_source_file (const prte_mca_base_var_t *var)
 {
@@ -179,7 +172,7 @@ static const char *prte_mca_base_var_source_file (const prte_mca_base_var_t *var
  * Generate a full name from three names
  */
 int prte_mca_base_var_generate_full_name4 (const char *project, const char *framework, const char *component,
-                                            const char *variable, char **full_name)
+                                           const char *variable, char **full_name)
 {
     const char * const names[] = {project, framework, component, variable};
     char *name, *tmp;
@@ -248,6 +241,961 @@ static char *append_filename_to_list(const char *filename)
     return NULL;
 }
 
+/*
+ * Set it up
+ */
+int prte_mca_base_var_init(void)
+{
+    int ret;
+    char *name = NULL;
+
+    if (!prte_mca_base_var_initialized) {
+        /* Init the value array for the param storage */
+
+        PRTE_CONSTRUCT(&prte_mca_base_vars, prte_pointer_array_t);
+        /* These values are arbitrary */
+        ret = prte_pointer_array_init (&prte_mca_base_vars, 128, 16384, 128);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+
+        prte_mca_base_var_count = 0;
+
+        /* Init the file param value list */
+
+        PRTE_CONSTRUCT(&prte_mca_base_var_file_values, prte_list_t);
+        PRTE_CONSTRUCT(&prte_mca_base_envar_file_values, prte_list_t);
+        PRTE_CONSTRUCT(&prte_mca_base_var_override_values, prte_list_t);
+        PRTE_CONSTRUCT(&prte_mca_base_var_index_hash, prte_hash_table_t);
+
+        ret = prte_hash_table_init (&prte_mca_base_var_index_hash, 1024);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+
+        ret = prte_mca_base_var_group_init ();
+        if  (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+
+        /* Set this before we register the parameter, below */
+
+        prte_mca_base_var_initialized = true;
+
+        prte_mca_base_var_cache_files(false);
+
+        /* register the envar-forwarding params */
+        (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list",
+                                          "Set SHELL env variables",
+                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                          PRTE_INFO_LVL_3, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list);
+
+        prte_mca_base_env_list_sep = PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
+        (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list_delimiter",
+                                          "Set SHELL env variables delimiter. Default: semicolon ';'",
+                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                          PRTE_INFO_LVL_3, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list_sep);
+
+        /* Set OMPI_MCA_prte_mca_base_env_list variable, it might not be set before
+         * if mca variable was taken from amca conf file. Need to set it
+         * here because prte_mca_base_var_process_env_list is called from schizo_ompi.c
+         * only when this env variable was set.
+         */
+        if (NULL != prte_mca_base_env_list) {
+            (void) prte_mca_base_var_env_name ("prte_mca_base_env_list", &name);
+            if (NULL != name) {
+                prte_setenv(name, prte_mca_base_env_list, false, &environ);
+                free(name);
+            }
+        }
+
+        /* Register internal MCA variable prte_mca_base_env_list_internal. It can be set only during
+         * parsing of amca conf file and contains SHELL env variables specified via -x there.
+         * Its format is the same as for prte_mca_base_env_list.
+         */
+        (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list_internal",
+                                          "Store SHELL env variables from amca conf file",
+                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_3,
+                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list_internal);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+static void process_env_list(char *env_list, char ***argv, char sep)
+{
+    char** tokens;
+    char *ptr, *value;
+
+    tokens = prte_argv_split(env_list, (int)sep);
+    if (NULL == tokens) {
+        return;
+    }
+
+    for (int i = 0 ; NULL != tokens[i] ; ++i) {
+        if (NULL == (ptr = strchr(tokens[i], '='))) {
+            value = getenv(tokens[i]);
+            if (NULL == value) {
+                prte_show_help("help-prte-mca-var.txt", "incorrect-env-list-param",
+                               true, tokens[i], env_list);
+                break;
+            }
+
+            /* duplicate the value to silence tainted string coverity issue */
+            value = strdup (value);
+            if (NULL == value) {
+                /* out of memory */
+                break;
+            }
+
+            if (NULL != (ptr = strchr(value, '='))) {
+                *ptr = '\0';
+                prte_setenv(value, ptr + 1, true, argv);
+            } else {
+                prte_setenv(tokens[i], value, true, argv);
+            }
+
+            free (value);
+        } else {
+            *ptr = '\0';
+            prte_setenv(tokens[i], ptr + 1, true, argv);
+            /* NTH: don't bother resetting ptr to = since the string will not be used again */
+        }
+    }
+
+    prte_argv_free(tokens);
+}
+
+int prte_mca_base_var_process_env_list(char ***argv)
+{
+    char sep;
+    sep = ';';
+    if (NULL != prte_mca_base_env_list_sep) {
+        if (1 == strlen(prte_mca_base_env_list_sep)) {
+            sep = prte_mca_base_env_list_sep[0];
+        } else {
+            prte_show_help("help-prte-mca-var.txt", "incorrect-env-list-sep",
+                           true, prte_mca_base_env_list_sep);
+            return PRTE_SUCCESS;
+        }
+    }
+    if (NULL != prte_mca_base_env_list) {
+        process_env_list(prte_mca_base_env_list, argv, sep);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_mca_base_var_process_env_list_from_file(char ***argv)
+{
+    if (NULL != prte_mca_base_env_list_internal) {
+        process_env_list(prte_mca_base_env_list_internal, argv, ';');
+    }
+    return PRTE_SUCCESS;
+}
+
+static void resolve_relative_paths(char **file_prefix, char *file_path, bool rel_path_search, char **files, char sep)
+{
+    char *tmp_str;
+    /*
+     * Resolve all relative paths.
+     * the file list returned will contain only absolute paths
+     */
+    if( PRTE_SUCCESS != fixup_files(file_prefix, file_path, rel_path_search, sep) ) {
+#if 0
+        /* JJH We need to die! */
+        abort();
+#else
+        ;
+#endif
+    }
+    else {
+        /* Prepend the files to the search list */
+        if (0 > asprintf(&tmp_str, "%s%c%s", *file_prefix, sep, *files)) {
+            prte_output(0, "OUT OF MEM");
+            free(*files);
+            free(tmp_str);
+            *files = NULL;
+            return;
+        }
+        free (*files);
+        *files = tmp_str;
+    }
+}
+
+int prte_mca_base_var_cache_files(bool rel_path_search)
+{
+    char *tmp;
+    int ret;
+
+    /* We may need this later */
+    home = (char*)prte_home_directory();
+
+    if (NULL == cwd) {
+        cwd = (char *) malloc(sizeof(char) * MAXPATHLEN);
+        if (NULL == (cwd = getcwd(cwd, MAXPATHLEN))) {
+            prte_output(0, "Error: Unable to get the current working directory\n");
+            cwd = strdup(".");
+        }
+    }
+
+#if PRTE_WANT_HOME_CONFIG_FILES
+    ret = asprintf(&prte_mca_base_var_files, "%s"PRTE_PATH_SEP".prte" PRTE_PATH_SEP
+                   "mca-params.conf%c%s" PRTE_PATH_SEP "prte-mca-params.conf",
+                   home, ',', prte_install_dirs.sysconfdir);
+#else
+    ret = asprintf(&prte_mca_base_var_files, "%s" PRTE_PATH_SEP "prte-mca-params.conf",
+                   prte_install_dirs.sysconfdir);
+#endif
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* Initialize a parameter that says where MCA param files can be found.
+     We may change this value so set the scope to PRTE_MCA_BASE_VAR_SCOPE_READONLY */
+    tmp = prte_mca_base_var_files;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_files", "Path for MCA "
+                                      "configuration files containing variable values",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_files);
+    free (tmp);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    prte_mca_base_envar_files = strdup(prte_mca_base_var_files);
+
+    (void) prte_mca_base_var_register_synonym (ret, "prte", "mca", NULL, "param_files",
+                                               PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+
+    ret = asprintf(&prte_mca_base_var_override_file, "%s" PRTE_PATH_SEP "prte-mca-params-override.conf",
+                   prte_install_dirs.sysconfdir);
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    tmp = prte_mca_base_var_override_file;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "override_param_file",
+                                      "Variables set in this file will override any value set in"
+                                      "the environment or another configuration file",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
+                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
+                                      &prte_mca_base_var_override_file);
+    free (tmp);
+    if (0 > ret) {
+        return ret;
+    }
+
+    /* Disable reading MCA parameter files. */
+    if (0 == strcmp (prte_mca_base_var_files, "none")) {
+        return PRTE_SUCCESS;
+    }
+
+    prte_mca_base_var_suppress_override_warning = false;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "suppress_override_warning",
+                                      "Suppress warnings when attempting to set an overridden value (default: false)",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                      PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_mca_base_var_suppress_override_warning);
+    if (0 > ret) {
+        return ret;
+    }
+
+    /* Aggregate MCA parameter files
+     * A prefix search path to look up aggregate MCA parameter file
+     * requests that do not specify an absolute path
+     */
+    prte_mca_base_var_file_prefix = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_prefix",
+                                      "Aggregate MCA parameter file sets",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_file_prefix);
+    if (0 > ret) {
+        return ret;
+    }
+
+    prte_mca_base_envar_file_prefix = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "envar_file_prefix",
+                                      "Aggregate MCA parameter file set for env variables",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_envar_file_prefix);
+    if (0 > ret) {
+        return ret;
+    }
+
+    ret = asprintf(&prte_mca_base_param_file_path, "%s" PRTE_PATH_SEP "amca-param-sets%c%s",
+                   prte_install_dirs.prtedatadir, PRTE_ENV_SEP, cwd);
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    tmp = prte_mca_base_param_file_path;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path",
+                                      "Aggregate MCA parameter Search path",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_param_file_path);
+    free (tmp);
+    if (0 > ret) {
+        return ret;
+    }
+
+    force_agg_path = NULL;
+    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path_force",
+                                      "Forced Aggregate MCA parameter Search path",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &force_agg_path);
+    if (0 > ret) {
+        return ret;
+    }
+
+    if (NULL != force_agg_path) {
+        if (NULL != prte_mca_base_param_file_path) {
+            char *tmp_str = prte_mca_base_param_file_path;
+
+            ret = asprintf(&prte_mca_base_param_file_path, "%s%c%s", force_agg_path, PRTE_ENV_SEP, tmp_str);
+            free(tmp_str);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+        } else {
+            prte_mca_base_param_file_path = strdup(force_agg_path);
+        }
+    }
+
+    if (NULL != prte_mca_base_var_file_prefix) {
+        resolve_relative_paths(&prte_mca_base_var_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_var_files, PRTE_ENV_SEP);
+    }
+    read_files (prte_mca_base_var_files, &prte_mca_base_var_file_values, ',');
+
+    if (NULL != prte_mca_base_envar_file_prefix) {
+        resolve_relative_paths(&prte_mca_base_envar_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_envar_files, ',');
+    }
+    read_files (prte_mca_base_envar_files, &prte_mca_base_envar_file_values, ',');
+
+    if (0 == access(prte_mca_base_var_override_file, F_OK)) {
+        read_files (prte_mca_base_var_override_file, &prte_mca_base_var_override_values, PRTE_ENV_SEP);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Look up an integer MCA parameter.
+ */
+int prte_mca_base_var_get_value (int vari, void *value,
+                                 prte_mca_base_var_source_t *source,
+                                 const char **source_file)
+{
+    prte_mca_base_var_t *var;
+    void **tmp = (void **) value;
+    int ret;
+
+    ret = var_get (vari, &var, true);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    if (!PRTE_VAR_IS_VALID(var[0])) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    if (NULL != value) {
+        /* Return a poiner to our backing store (either a char **, int *,
+         or bool *) */
+        *tmp = var->mbv_storage;
+    }
+
+    if (NULL != source) {
+        *source = var->mbv_source;
+    }
+
+    if (NULL != source_file) {
+        *source_file = prte_mca_base_var_source_file (var);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+static int var_set_string (prte_mca_base_var_t *var, char *value)
+{
+    char *tmp;
+    int ret;
+
+    if (NULL != var->mbv_storage->stringval) {
+        free (var->mbv_storage->stringval);
+    }
+
+    var->mbv_storage->stringval = NULL;
+
+    if (NULL == value || 0 == strlen (value)) {
+        return PRTE_SUCCESS;
+    }
+
+    /* Replace all instances of ~/ in a path-style string with the
+     user's home directory. This may be handled by the enumerator
+     in the future. */
+    if (0 == strncmp (value, "~/", 2)) {
+        if (NULL != home) {
+            ret = asprintf (&value, "%s/%s", home, value + 2);
+            if (0 > ret) {
+                return PRTE_ERROR;
+            }
+        } else {
+            value = strdup (value + 2);
+        }
+    } else {
+        value = strdup (value);
+    }
+
+    if (NULL == value) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    while (NULL != (tmp = strstr (value, ":~/"))) {
+        tmp[0] = '\0';
+        tmp += 3;
+
+        ret = asprintf (&tmp, "%s:%s%s%s", value,
+                        home ? home : "", home ? "/" : "", tmp);
+
+        free (value);
+
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+
+        value = tmp;
+    }
+
+    var->mbv_storage->stringval = value;
+
+    return PRTE_SUCCESS;
+}
+
+static int int_from_string(const char *src, prte_mca_base_var_enum_t *enumerator, uint64_t *value_out)
+{
+    uint64_t value;
+    bool is_int;
+    char *tmp;
+
+    if (NULL == src || 0 == strlen (src)) {
+        if (NULL == enumerator) {
+            *value_out = 0;
+        }
+
+        return PRTE_SUCCESS;
+    }
+
+    if (enumerator) {
+        int int_val, ret;
+        ret = enumerator->value_from_string(enumerator, src, &int_val);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+        *value_out = (uint64_t) int_val;
+
+        return PRTE_SUCCESS;
+    }
+
+    /* Check for an integer value */
+    value = strtoull (src, &tmp, 0);
+    if (tmp[0] == '\0') {
+        is_int = true;
+    } else {
+        is_int = false;
+    }
+
+    if (!is_int && tmp != src) {
+        switch (tmp[0]) {
+            case 'G':
+            case 'g':
+                value <<= 30;
+                break;
+            case 'M':
+            case 'm':
+                value <<= 20;
+                break;
+            case 'K':
+            case 'k':
+                value <<= 10;
+                break;
+            default:
+                break;
+        }
+    }
+
+    *value_out = value;
+
+    return PRTE_SUCCESS;
+}
+
+static int var_set_from_string (prte_mca_base_var_t *var, char *src)
+{
+    prte_mca_base_var_storage_t *dst = var->mbv_storage;
+    uint64_t int_value = 0;
+    int ret;
+
+    switch (var->mbv_type) {
+        case PRTE_MCA_BASE_VAR_TYPE_INT:
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
+        case PRTE_MCA_BASE_VAR_TYPE_BOOL:
+        case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
+            ret = int_from_string(src, var->mbv_enumerator, &int_value);
+            if (PRTE_ERR_VALUE_OUT_OF_BOUNDS == ret ||
+                (PRTE_MCA_BASE_VAR_TYPE_INT == var->mbv_type && ((int) int_value != (int64_t) int_value)) ||
+                (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == var->mbv_type && ((unsigned int) int_value != int_value))) {
+                if (var->mbv_enumerator) {
+                    char *valid_values;
+                    (void) var->mbv_enumerator->dump(var->mbv_enumerator, &valid_values);
+                    prte_show_help("help-prte-mca-var.txt", "invalid-value-enum",
+                                   true, var->mbv_full_name, src, valid_values);
+                    free(valid_values);
+                } else {
+                    prte_show_help("help-prte-mca-var.txt", "invalid-value",
+                                   true, var->mbv_full_name, src);
+                }
+
+                return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            }
+
+            if (PRTE_MCA_BASE_VAR_TYPE_INT == var->mbv_type ||
+                PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == var->mbv_type) {
+                int *castme = (int*) var->mbv_storage;
+                *castme = int_value;
+            } else if (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG == var->mbv_type) {
+                unsigned long *castme = (unsigned long*) var->mbv_storage;
+                *castme = (unsigned long) int_value;
+            } else if (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG == var->mbv_type) {
+                unsigned long long *castme = (unsigned long long*) var->mbv_storage;
+                *castme = (unsigned long long) int_value;
+            } else if (PRTE_MCA_BASE_VAR_TYPE_SIZE_T == var->mbv_type) {
+                size_t *castme = (size_t*) var->mbv_storage;
+                *castme = (size_t) int_value;
+            } else if (PRTE_MCA_BASE_VAR_TYPE_BOOL == var->mbv_type) {
+                bool *castme = (bool*) var->mbv_storage;
+                *castme = !!int_value;
+            }
+
+            return ret;
+        case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
+            dst->lfval = strtod (src, NULL);
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_STRING:
+        case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
+            var_set_string (var, src);
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_MAX:
+            return PRTE_ERROR;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Set a variable
+ */
+int prte_mca_base_var_set_value (int vari, const void *value, size_t size, prte_mca_base_var_source_t source,
+                                 const char *source_file)
+{
+    (void)size;
+    prte_mca_base_var_t *var;
+    int ret;
+
+    ret = var_get (vari, &var, true);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    if (!PRTE_VAR_IS_VALID(var[0])) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (!PRTE_VAR_IS_SETTABLE(var[0])) {
+        return PRTE_ERR_PERM;
+    }
+
+    if (NULL != var->mbv_enumerator) {
+        /* Validate */
+        ret = var->mbv_enumerator->string_from_value(var->mbv_enumerator,
+                                                     ((int *) value)[0], NULL);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+    }
+
+    if (PRTE_MCA_BASE_VAR_TYPE_STRING != var->mbv_type && PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING != var->mbv_type) {
+        memmove (var->mbv_storage, value, prte_var_type_sizes[var->mbv_type]);
+    } else {
+        var_set_string (var, (char *) value);
+    }
+
+    var->mbv_source = source;
+
+    if (PRTE_MCA_BASE_VAR_SOURCE_FILE == source && NULL != source_file) {
+        var->mbv_file_value = NULL;
+        var->mbv_source_file = append_filename_to_list(source_file);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Deregister a parameter
+ */
+int prte_mca_base_var_deregister(int vari)
+{
+    prte_mca_base_var_t *var;
+    int ret;
+
+    ret = var_get (vari, &var, false);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    if (!PRTE_VAR_IS_VALID(var[0])) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    /* Mark this parameter as invalid but keep its info in case this
+     parameter is reregistered later */
+    var->mbv_flags &= ~PRTE_MCA_BASE_VAR_FLAG_VALID;
+
+    /* Done deregistering synonym */
+    if (PRTE_MCA_BASE_VAR_FLAG_SYNONYM & var->mbv_flags) {
+        return PRTE_SUCCESS;
+    }
+
+    /* Release the current value if it is a string. */
+    if ((PRTE_MCA_BASE_VAR_TYPE_STRING == var->mbv_type || PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING == var->mbv_type) &&
+        var->mbv_storage->stringval) {
+        free (var->mbv_storage->stringval);
+        var->mbv_storage->stringval = NULL;
+    } else {
+        PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
+    }
+
+    var->mbv_enumerator = NULL;
+
+    var->mbv_storage = NULL;
+
+    return PRTE_SUCCESS;
+}
+
+static int var_get (int vari, prte_mca_base_var_t **var_out, bool original)
+{
+    prte_mca_base_var_t *var;
+
+    if (var_out) {
+        *var_out = NULL;
+    }
+
+    /* Check for bozo cases */
+    if (!prte_mca_base_var_initialized) {
+        return PRTE_ERROR;
+    }
+
+    if (vari < 0) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    var = prte_pointer_array_get_item (&prte_mca_base_vars, vari);
+    if (NULL == var) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (PRTE_VAR_IS_SYNONYM(var[0]) && original) {
+        return var_get(var->mbv_synonym_for, var_out, false);
+    }
+
+    if (var_out) {
+        *var_out = var;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_mca_base_var_env_name(const char *param_name,
+                               char **env_name)
+{
+    int ret;
+
+    assert (NULL != env_name);
+
+    ret = asprintf(env_name, "%s%s", mca_prefix, param_name);
+    if (0 > ret) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Find the index for an MCA parameter based on its names.
+ */
+static int var_find_by_name (const char *full_name, int *vari, bool invalidok)
+{
+    prte_mca_base_var_t *var = NULL;
+    void *tmp;
+    int rc;
+
+    rc = prte_hash_table_get_value_ptr (&prte_mca_base_var_index_hash, full_name, strlen (full_name),
+                                        &tmp);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    (void) var_get ((int)(uintptr_t) tmp, &var, false);
+
+    if (invalidok || (var && PRTE_VAR_IS_VALID(var[0]))) {
+        *vari = (int)(uintptr_t) tmp;
+        return PRTE_SUCCESS;
+    }
+
+    return PRTE_ERR_NOT_FOUND;
+}
+
+static int var_find (const char *project_name, const char *framework_name,
+                     const char *component_name, const char *variable_name,
+                     bool invalidok)
+{
+    (void)project_name;
+    char *full_name;
+    int ret, vari;
+
+    ret = prte_mca_base_var_generate_full_name4 (NULL, framework_name, component_name,
+                                                 variable_name, &full_name);
+    if (PRTE_SUCCESS != ret) {
+        return PRTE_ERROR;
+    }
+
+    ret = var_find_by_name(full_name, &vari, invalidok);
+
+    /* NTH: should we verify the name components match? */
+
+    free (full_name);
+
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    return vari;
+}
+
+/*
+ * Find the index for an MCA parameter based on its name components.
+ */
+int prte_mca_base_var_find (const char *project_name, const char *framework_name,
+                            const char *component_name, const char *variable_name)
+{
+    return var_find (project_name, framework_name, component_name, variable_name, false);
+}
+
+/*
+ * Find the index for an MCA parameter based on full name.
+ */
+int prte_mca_base_var_find_by_name (const char *full_name, int *vari)
+{
+    return var_find_by_name (full_name, vari, false);
+}
+
+int prte_mca_base_var_set_flag (int vari, prte_mca_base_var_flag_t flag, bool set)
+{
+    prte_mca_base_var_t *var;
+    int ret;
+
+    ret = var_get (vari, &var, true);
+    if (PRTE_SUCCESS != ret || PRTE_VAR_IS_SYNONYM(var[0])) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    var->mbv_flags = (var->mbv_flags & ~flag) | (set ? flag : 0);
+
+    /* All done */
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Return info on a parameter at an index
+ */
+int prte_mca_base_var_get (int vari, const prte_mca_base_var_t **var)
+{
+    int ret;
+    ret = var_get (vari, (prte_mca_base_var_t **) var, false);
+
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    if (!PRTE_VAR_IS_VALID(*(var[0]))) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Make an argv-style list of strings suitable for an environment
+ */
+int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
+{
+    prte_mca_base_var_t *var;
+    size_t i, len;
+    int ret=0;
+
+    /* Check for bozo cases */
+
+    if (!prte_mca_base_var_initialized) {
+        return PRTE_ERROR;
+    }
+
+    /* Iterate through all the registered parameters */
+
+    len = prte_pointer_array_get_size(&prte_mca_base_vars);
+    for (i = 0; i < len; ++i) {
+        char *value_string;
+        char *str = NULL;
+
+        var = prte_pointer_array_get_item (&prte_mca_base_vars, i);
+        if (NULL == var) {
+            continue;
+        }
+
+        /* Don't output default values or internal variables (unless
+         requested) */
+        if (PRTE_MCA_BASE_VAR_SOURCE_DEFAULT == var->mbv_source ||
+            (!internal && PRTE_VAR_IS_INTERNAL(var[0]))) {
+            continue;
+        }
+
+        if ((PRTE_MCA_BASE_VAR_TYPE_STRING == var->mbv_type || PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING == var->mbv_type) &&
+            NULL == var->mbv_storage->stringval) {
+            continue;
+        }
+
+        ret = var_value_string (var, &value_string);
+        if (PRTE_SUCCESS != ret) {
+            goto cleanup;
+        }
+
+        ret = asprintf (&str, "%s%s=%s", mca_prefix, var->mbv_full_name,
+                        value_string);
+        free (value_string);
+        if (0 > ret) {
+            goto cleanup;
+        }
+
+        prte_argv_append(num_env, env, str);
+        free(str);
+
+        ret = PRTE_SUCCESS;
+        switch (var->mbv_source) {
+            case PRTE_MCA_BASE_VAR_SOURCE_FILE:
+            case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
+                ret = asprintf (&str, "%sSOURCE_%s=FILE:%s", mca_prefix, var->mbv_full_name,
+                                prte_mca_base_var_source_file (var));
+                break;
+            case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
+                ret = asprintf (&str, "%sSOURCE_%s=COMMAND_LINE", mca_prefix, var->mbv_full_name);
+                break;
+            case PRTE_MCA_BASE_VAR_SOURCE_ENV:
+            case PRTE_MCA_BASE_VAR_SOURCE_SET:
+            case PRTE_MCA_BASE_VAR_SOURCE_DEFAULT:
+                str = NULL;
+                break;
+            case PRTE_MCA_BASE_VAR_SOURCE_MAX:
+                goto cleanup;
+        }
+
+        if (NULL != str) {
+            prte_argv_append(num_env, env, str);
+            free(str);
+        }
+    }
+    if (ret < 0) {
+        ret = PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* All done */
+    return ret;
+
+    /* Error condition */
+
+cleanup:
+    if (*num_env > 0) {
+        prte_argv_free(*env);
+        *num_env = 0;
+        *env = NULL;
+    }
+    return PRTE_ERR_NOT_FOUND;
+}
+
+/*
+ * Shut down the MCA parameter system (normally only invoked by the
+ * MCA framework itself).
+ */
+int prte_mca_base_var_finalize(void)
+{
+    prte_object_t *prteect;
+    prte_list_item_t *item;
+    int size, i;
+
+    if (prte_mca_base_var_initialized) {
+        size = prte_pointer_array_get_size(&prte_mca_base_vars);
+        for (i = 0 ; i < size ; ++i) {
+            prteect = prte_pointer_array_get_item (&prte_mca_base_vars, i);
+            if (NULL != prteect) {
+                PRTE_RELEASE(prteect);
+            }
+        }
+        PRTE_DESTRUCT(&prte_mca_base_vars);
+
+        while (NULL !=
+               (item = prte_list_remove_first(&prte_mca_base_var_file_values))) {
+            PRTE_RELEASE(item);
+        }
+        PRTE_DESTRUCT(&prte_mca_base_var_file_values);
+
+        while (NULL !=
+               (item = prte_list_remove_first(&prte_mca_base_envar_file_values))) {
+            PRTE_RELEASE(item);
+        }
+        PRTE_DESTRUCT(&prte_mca_base_envar_file_values);
+
+        while (NULL !=
+               (item = prte_list_remove_first(&prte_mca_base_var_override_values))) {
+            PRTE_RELEASE(item);
+        }
+        PRTE_DESTRUCT(&prte_mca_base_var_override_values);
+
+        if( NULL != cwd ) {
+            free(cwd);
+            cwd = NULL;
+        }
+
+        prte_mca_base_var_initialized = false;
+        prte_mca_base_var_count = 0;
+
+        if (NULL != prte_mca_base_var_file_list) {
+            prte_argv_free(prte_mca_base_var_file_list);
+        }
+        prte_mca_base_var_file_list = NULL;
+
+        (void) prte_mca_base_var_group_finalize ();
+
+        PRTE_DESTRUCT(&prte_mca_base_var_index_hash);
+
+        free (prte_mca_base_envar_files);
+        prte_mca_base_envar_files = NULL;
+    }
+
+    /* All done */
+
+    return PRTE_SUCCESS;
+}
+
+
+/*************************************************************************/
 static int fixup_files(char **file_list, char * path, bool rel_path_search, char sep) {
     int exit_status = PRTE_SUCCESS;
     char **files = NULL;
@@ -324,35 +1272,6 @@ static int fixup_files(char **file_list, char * path, bool rel_path_search, char
     return exit_status;
 }
 
-static void resolve_relative_paths(char **file_prefix, char *file_path, bool rel_path_search, char **files, char sep)
-{
-    char *tmp_str;
-    /*
-     * Resolve all relative paths.
-     * the file list returned will contain only absolute paths
-     */
-    if( PRTE_SUCCESS != fixup_files(file_prefix, file_path, rel_path_search, sep) ) {
-#if 0
-        /* JJH We need to die! */
-        abort();
-#else
-        ;
-#endif
-    }
-    else {
-        /* Prepend the files to the search list */
-        if (0 > asprintf(&tmp_str, "%s%c%s", *file_prefix, sep, *files)) {
-            prte_output(0, "OUT OF MEM");
-            free(*files);
-            free(tmp_str);
-            *files = NULL;
-            return;
-        }
-        free (*files);
-        *files = tmp_str;
-    }
-}
-
 static int read_files(char *file_list, prte_list_t *file_values, char sep)
 {
     char **tmp = prte_argv_split(file_list, sep);
@@ -380,819 +1299,6 @@ static int read_files(char *file_list, prte_list_t *file_values, char sep)
     return PRTE_SUCCESS;
 }
 
-static int cache_files(bool rel_path_search)
-{
-    char *tmp;
-    int ret;
-
-    /* We may need this later */
-    home = (char*)prte_home_directory(geteuid());
-
-    if (NULL == cwd) {
-        cwd = (char *) malloc(sizeof(char) * MAXPATHLEN);
-        if (NULL == (cwd = getcwd(cwd, MAXPATHLEN))) {
-            prte_output(0, "Error: Unable to get the current working directory\n");
-            cwd = strdup(".");
-        }
-    }
-
-#if PRTE_WANT_HOME_CONFIG_FILES
-    ret = asprintf(&prte_mca_base_var_files, "%s"PRTE_PATH_SEP".prte" PRTE_PATH_SEP
-                   "mca-params.conf%c%s" PRTE_PATH_SEP "prte-mca-params.conf",
-                   home, ',', prte_pinstall_dirs.sysconfdir);
-#else
-    ret = asprintf(&prte_mca_base_var_files, "%s" PRTE_PATH_SEP "prte-mca-params.conf",
-                   prte_pinstall_dirs.sysconfdir);
-#endif
-    if (0 > ret) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    /* Initialize a parameter that says where MCA param files can be found.
-     We may change this value so set the scope to PRTE_MCA_BASE_VAR_SCOPE_READONLY */
-    tmp = prte_mca_base_var_files;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_files", "Path for MCA "
-                                      "configuration files containing variable values",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_files);
-    free (tmp);
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    prte_mca_base_envar_files = strdup(prte_mca_base_var_files);
-
-    (void) prte_mca_base_var_register_synonym (ret, "prte", "mca", NULL, "param_files",
-                                               PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    ret = asprintf(&prte_mca_base_var_override_file, "%s" PRTE_PATH_SEP "prte-mca-params-override.conf",
-                   prte_pinstall_dirs.sysconfdir);
-    if (0 > ret) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    tmp = prte_mca_base_var_override_file;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "override_param_file",
-                                      "Variables set in this file will override any value set in"
-                                      "the environment or another configuration file",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                      PRTE_INFO_LVL_2, PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                      &prte_mca_base_var_override_file);
-    free (tmp);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Disable reading MCA parameter files. */
-    if (0 == strcmp (prte_mca_base_var_files, "none")) {
-        return PRTE_SUCCESS;
-    }
-
-    prte_mca_base_var_suppress_override_warning = false;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "suppress_override_warning",
-                                      "Suppress warnings when attempting to set an overridden value (default: false)",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
-                                      PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_mca_base_var_suppress_override_warning);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Aggregate MCA parameter files
-     * A prefix search path to look up aggregate MCA parameter file
-     * requests that do not specify an absolute path
-     */
-    prte_mca_base_var_file_prefix = NULL;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_prefix",
-                                      "Aggregate MCA parameter file sets",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_file_prefix);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prte_mca_base_envar_file_prefix = NULL;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "envar_file_prefix",
-                                      "Aggregate MCA parameter file set for env variables",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_envar_file_prefix);
-    if (0 > ret) {
-        return ret;
-    }
-
-    ret = asprintf(&prte_mca_base_param_file_path, "%s" PRTE_PATH_SEP "amca-param-sets%c%s",
-                   prte_pinstall_dirs.prtedatadir, PRTE_ENV_SEP, cwd);
-    if (0 > ret) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    tmp = prte_mca_base_param_file_path;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path",
-                                      "Aggregate MCA parameter Search path",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_param_file_path);
-    free (tmp);
-    if (0 > ret) {
-        return ret;
-    }
-
-    force_agg_path = NULL;
-    ret = prte_mca_base_var_register ("prte", "mca", "base", "param_file_path_force",
-                                      "Forced Aggregate MCA parameter Search path",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &force_agg_path);
-    if (0 > ret) {
-        return ret;
-    }
-
-    if (NULL != force_agg_path) {
-        if (NULL != prte_mca_base_param_file_path) {
-            char *tmp_str = prte_mca_base_param_file_path;
-
-            ret = asprintf(&prte_mca_base_param_file_path, "%s%c%s", force_agg_path, PRTE_ENV_SEP, tmp_str);
-            free(tmp_str);
-            if (0 > ret) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
-            }
-        } else {
-            prte_mca_base_param_file_path = strdup(force_agg_path);
-        }
-    }
-
-    if (NULL != prte_mca_base_var_file_prefix) {
-        resolve_relative_paths(&prte_mca_base_var_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_var_files, PRTE_ENV_SEP);
-    }
-    read_files (prte_mca_base_var_files, &prte_mca_base_var_file_values, ',');
-
-    if (NULL != prte_mca_base_envar_file_prefix) {
-        resolve_relative_paths(&prte_mca_base_envar_file_prefix, prte_mca_base_param_file_path, rel_path_search, &prte_mca_base_envar_files, ',');
-    }
-    read_files (prte_mca_base_envar_files, &prte_mca_base_envar_file_values, ',');
-
-    if (0 == access(prte_mca_base_var_override_file, F_OK)) {
-        read_files (prte_mca_base_var_override_file, &prte_mca_base_var_override_values, PRTE_ENV_SEP);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Set it up
- */
-int prte_mca_base_var_init(void)
-{
-    int ret;
-
-    if (!prte_mca_base_var_initialized) {
-        /* Init the value array for the param storage */
-
-        PRTE_CONSTRUCT(&prte_mca_base_vars, prte_pointer_array_t);
-        /* These values are arbitrary */
-        ret = prte_pointer_array_init (&prte_mca_base_vars, 128, 16384, 128);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-
-        prte_mca_base_var_count = 0;
-
-        /* Init the file param value list */
-
-        PRTE_CONSTRUCT(&prte_mca_base_var_file_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_envar_file_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_var_override_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_var_index_hash, prte_hash_table_t);
-
-        ret = prte_hash_table_init (&prte_mca_base_var_index_hash, 1024);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-
-        ret = prte_mca_base_var_group_init ();
-        if  (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-
-        /* Set this before we register the parameter, below */
-
-        prte_mca_base_var_initialized = true;
-
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Look up an integer MCA parameter.
- */
-int prte_mca_base_var_get_value (int vari, const void *value,
-                                  prte_mca_base_var_source_t *source,
-                                  const char **source_file)
-{
-    prte_mca_base_var_t *var;
-    void **tmp = (void **) value;
-    int ret;
-
-    ret = var_get (vari, &var, true);
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    if (NULL != value) {
-        /* Return a poiner to our backing store (either a char **, int *,
-           or bool *) */
-        *tmp = var->mbv_storage;
-    }
-
-    if (NULL != source) {
-        *source = var->mbv_source;
-    }
-
-    if (NULL != source_file) {
-        *source_file = prte_mca_base_var_source_file (var);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-static int var_set_string (prte_mca_base_var_t *var, char *value)
-{
-    char *tmp;
-    int ret;
-
-    if (NULL != var->mbv_storage->stringval) {
-        free (var->mbv_storage->stringval);
-    }
-
-    var->mbv_storage->stringval = NULL;
-
-    if (NULL == value || 0 == strlen (value)) {
-        return PRTE_SUCCESS;
-    }
-
-    /* Replace all instances of ~/ in a path-style string with the
-       user's home directory. This may be handled by the enumerator
-       in the future. */
-    if (0 == strncmp (value, "~/", 2)) {
-        if (NULL != home) {
-            ret = prte_asprintf (&value, "%s/%s", home, value + 2);
-            if (0 > ret) {
-                return PRTE_ERROR;
-            }
-        } else {
-            value = strdup (value + 2);
-        }
-    } else {
-        value = strdup (value);
-    }
-
-    if (NULL == value) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    while (NULL != (tmp = strstr (value, ":~/"))) {
-        tmp[0] = '\0';
-        tmp += 3;
-
-        ret = prte_asprintf (&tmp, "%s:%s%s%s", value,
-                        home ? home : "", home ? "/" : "", tmp);
-
-        free (value);
-
-        if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-
-        value = tmp;
-    }
-
-    var->mbv_storage->stringval = value;
-
-    return PRTE_SUCCESS;
-}
-
-static int int_from_string(const char *src, prte_mca_base_var_enum_t *enumerator, uint64_t *value_out)
-{
-    uint64_t value;
-    bool is_int;
-    char *tmp;
-
-    if (NULL == src || 0 == strlen (src)) {
-        if (NULL == enumerator) {
-            *value_out = 0;
-        }
-
-        return PRTE_SUCCESS;
-    }
-
-    if (enumerator) {
-        int int_val, ret;
-        ret = enumerator->value_from_string(enumerator, src, &int_val);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-        *value_out = (uint64_t) int_val;
-
-        return PRTE_SUCCESS;
-    }
-
-    /* Check for an integer value */
-    value = strtoull (src, &tmp, 0);
-    is_int = tmp[0] == '\0';
-
-    if (!is_int && tmp != src) {
-        switch (tmp[0]) {
-        case 'G':
-        case 'g':
-            value <<= 10;
-        case 'M':
-        case 'm':
-            value <<= 10;
-        case 'K':
-        case 'k':
-            value <<= 10;
-            break;
-        default:
-            break;
-        }
-    }
-
-    *value_out = value;
-
-    return PRTE_SUCCESS;
-}
-
-static int var_set_from_string (prte_mca_base_var_t *var, char *src)
-{
-    prte_mca_base_var_storage_t *dst = var->mbv_storage;
-    uint64_t int_value = 0;
-    int ret;
-
-    switch (var->mbv_type) {
-    case PRTE_MCA_BASE_VAR_TYPE_INT:
-    case PRTE_MCA_BASE_VAR_TYPE_INT32_T:
-    case PRTE_MCA_BASE_VAR_TYPE_UINT32_T:
-    case PRTE_MCA_BASE_VAR_TYPE_LONG:
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
-    case PRTE_MCA_BASE_VAR_TYPE_INT64_T:
-    case PRTE_MCA_BASE_VAR_TYPE_UINT64_T:
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
-    case PRTE_MCA_BASE_VAR_TYPE_BOOL:
-    case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
-        ret = int_from_string(src, var->mbv_enumerator, &int_value);
-        if (PRTE_SUCCESS != ret ||
-            (PRTE_MCA_BASE_VAR_TYPE_INT == var->mbv_type && ((int) int_value != (int64_t) int_value)) ||
-            (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == var->mbv_type && ((unsigned int) int_value != int_value))) {
-            if (var->mbv_enumerator) {
-                char *valid_values;
-                (void) var->mbv_enumerator->dump(var->mbv_enumerator, &valid_values);
-                prte_show_help("help-prte-mca-var.txt", "invalid-value-enum",
-                               true, var->mbv_full_name, src, valid_values);
-                free(valid_values);
-            } else {
-                prte_show_help("help-prte-mca-var.txt", "invalid-value",
-                               true, var->mbv_full_name, src);
-            }
-
-            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
-        }
-
-        if (PRTE_MCA_BASE_VAR_TYPE_INT == var->mbv_type ||
-            PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == var->mbv_type) {
-            int *castme = (int*) var->mbv_storage;
-            *castme = int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_INT32_T == var->mbv_type ||
-            PRTE_MCA_BASE_VAR_TYPE_UINT32_T == var->mbv_type) {
-            int32_t *castme = (int32_t *) var->mbv_storage;
-            *castme = int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_INT64_T == var->mbv_type ||
-            PRTE_MCA_BASE_VAR_TYPE_UINT64_T == var->mbv_type) {
-            int64_t *castme = (int64_t *) var->mbv_storage;
-            *castme = int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_LONG == var->mbv_type) {
-            long *castme = (long*) var->mbv_storage;
-            *castme = (long) int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG == var->mbv_type) {
-            unsigned long *castme = (unsigned long*) var->mbv_storage;
-            *castme = (unsigned long) int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG == var->mbv_type) {
-            unsigned long long *castme = (unsigned long long*) var->mbv_storage;
-            *castme = (unsigned long long) int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_SIZE_T == var->mbv_type) {
-            size_t *castme = (size_t*) var->mbv_storage;
-            *castme = (size_t) int_value;
-        } else if (PRTE_MCA_BASE_VAR_TYPE_BOOL == var->mbv_type) {
-            bool *castme = (bool*) var->mbv_storage;
-            *castme = !!int_value;
-        }
-
-        return ret;
-    case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
-        dst->lfval = strtod (src, NULL);
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_STRING:
-    case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
-        var_set_string (var, src);
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_MAX:
-        return PRTE_ERROR;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Set a variable
- */
-int prte_mca_base_var_set_value (int vari, const void *value, size_t size,
-                                  prte_mca_base_var_source_t source, const char *source_file)
-{
-    prte_mca_base_var_t *var;
-    int ret;
-
-    ret = var_get (vari, &var, true);
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    if (!PRTE_VAR_IS_SETTABLE(var[0])) {
-        return PRTE_ERR_PERM;
-    }
-
-    if (NULL != var->mbv_enumerator) {
-        /* Validate */
-        ret = var->mbv_enumerator->string_from_value(var->mbv_enumerator,
-                                                     ((int *) value)[0], NULL);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-    }
-
-    if (PRTE_MCA_BASE_VAR_TYPE_STRING != var->mbv_type && PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING != var->mbv_type) {
-        memmove (var->mbv_storage, value, prte_var_type_sizes[var->mbv_type]);
-    } else {
-        var_set_string (var, (char *) value);
-    }
-
-    var->mbv_source = source;
-
-    if (PRTE_MCA_BASE_VAR_SOURCE_FILE == source && NULL != source_file) {
-        var->mbv_file_value = NULL;
-        var->mbv_source_file = append_filename_to_list(source_file);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Deregister a parameter
- */
-int prte_mca_base_var_deregister(int vari)
-{
-    prte_mca_base_var_t *var;
-    int ret;
-
-    ret = var_get (vari, &var, false);
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    /* Mark this parameter as invalid but keep its info in case this
-       parameter is reregistered later */
-    var->mbv_flags &= ~PRTE_MCA_BASE_VAR_FLAG_VALID;
-
-    /* Done deregistering synonym */
-    if (PRTE_MCA_BASE_VAR_FLAG_SYNONYM & var->mbv_flags) {
-        return PRTE_SUCCESS;
-    }
-
-    /* Release the current value if it is a string. */
-    if ((PRTE_MCA_BASE_VAR_TYPE_STRING == var->mbv_type || PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING == var->mbv_type) &&
-        var->mbv_storage->stringval) {
-        free (var->mbv_storage->stringval);
-        var->mbv_storage->stringval = NULL;
-    } else {
-        PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
-    }
-
-    var->mbv_enumerator = NULL;
-
-    var->mbv_storage = NULL;
-
-    return PRTE_SUCCESS;
-}
-
-static int var_get (int vari, prte_mca_base_var_t **var_out, bool original)
-{
-    prte_mca_base_var_t *var;
-
-    if (var_out) {
-        *var_out = NULL;
-    }
-
-    /* Check for bozo cases */
-    if (!prte_mca_base_var_initialized) {
-        return PRTE_ERROR;
-    }
-
-    if (vari < 0) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    var = prte_pointer_array_get_item (&prte_mca_base_vars, vari);
-    if (NULL == var) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    if (PRTE_VAR_IS_SYNONYM(var[0]) && original) {
-        return var_get(var->mbv_synonym_for, var_out, false);
-    }
-
-    if (var_out) {
-        *var_out = var;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-int prte_mca_base_var_env_name(const char *param_name,
-                                char **env_name)
-{
-    int ret;
-
-    assert (NULL != env_name);
-
-    ret = prte_asprintf(env_name, "%s%s", prte_mca_prefix, param_name);
-    if (0 > ret) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Find the index for an MCA parameter based on its names.
- */
-static int var_find_by_name (const char *full_name, int *vari, bool invalidok)
-{
-    prte_mca_base_var_t *var = NULL;
-    void *tmp;
-    int rc;
-
-    rc = prte_hash_table_get_value_ptr (&prte_mca_base_var_index_hash, full_name, strlen (full_name),
-                                        &tmp);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
-    (void) var_get ((int)(uintptr_t) tmp, &var, false);
-
-    if (invalidok || (var && PRTE_VAR_IS_VALID(var[0]))) {
-        *vari = (int)(uintptr_t) tmp;
-        return PRTE_SUCCESS;
-    }
-
-    return PRTE_ERR_NOT_FOUND;
-}
-
-static int var_find (const char *project_name, const char *framework_name,
-                     const char *component_name, const char *variable_name,
-                     bool invalidok)
-{
-    char *full_name;
-    int ret, vari;
-
-    ret = prte_mca_base_var_generate_full_name4 (NULL, framework_name, component_name,
-                                                  variable_name, &full_name);
-    if (PRTE_SUCCESS != ret) {
-        return PRTE_ERROR;
-    }
-
-    ret = var_find_by_name(full_name, &vari, invalidok);
-
-    /* NTH: should we verify the name components match? */
-
-    free (full_name);
-
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    return vari;
-}
-
-/*
- * Find the index for an MCA parameter based on its name components.
- */
-int prte_mca_base_var_find (const char *project_name, const char *framework_name,
-                             const char *component_name, const char *variable_name)
-{
-    return var_find (project_name, framework_name, component_name, variable_name, false);
-}
-
-/*
- * Find the index for an MCA parameter based on full name.
- */
-int prte_mca_base_var_find_by_name (const char *full_name, int *vari)
-{
-    return var_find_by_name (full_name, vari, false);
-}
-
-int prte_mca_base_var_set_flag (int vari, prte_mca_base_var_flag_t flag, bool set)
-{
-    prte_mca_base_var_t *var;
-    int ret;
-
-    ret = var_get (vari, &var, true);
-    if (PRTE_SUCCESS != ret || PRTE_VAR_IS_SYNONYM(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    var->mbv_flags = (var->mbv_flags & ~flag) | (set ? flag : PRTE_MCA_BASE_VAR_FLAG_NONE);
-
-    /* All done */
-    return PRTE_SUCCESS;
-}
-
-/*
- * Return info on a parameter at an index
- */
-int prte_mca_base_var_get (int vari, const prte_mca_base_var_t **var)
-{
-    int ret;
-    ret = var_get (vari, (prte_mca_base_var_t **) var, false);
-
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    if (!PRTE_VAR_IS_VALID(*(var[0]))) {
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Make an argv-style list of strings suitable for an environment
- */
-int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
-{
-    prte_mca_base_var_t *var;
-    size_t i, len;
-    int ret;
-
-    /* Check for bozo cases */
-
-    if (!prte_mca_base_var_initialized) {
-        return PRTE_ERROR;
-    }
-
-    /* Iterate through all the registered parameters */
-
-    len = prte_pointer_array_get_size(&prte_mca_base_vars);
-    for (i = 0; i < len; ++i) {
-        char *value_string;
-        char *str = NULL;
-
-        var = prte_pointer_array_get_item (&prte_mca_base_vars, i);
-        if (NULL == var) {
-            continue;
-        }
-
-        /* Don't output default values or internal variables (unless
-           requested) */
-        if (PRTE_MCA_BASE_VAR_SOURCE_DEFAULT == var->mbv_source ||
-            (!internal && PRTE_VAR_IS_INTERNAL(var[0]))) {
-            continue;
-        }
-
-        if ((PRTE_MCA_BASE_VAR_TYPE_STRING == var->mbv_type || PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING == var->mbv_type) &&
-            NULL == var->mbv_storage->stringval) {
-            continue;
-        }
-
-        ret = var_value_string (var, &value_string);
-        if (PRTE_SUCCESS != ret) {
-            goto cleanup;
-        }
-
-        ret = prte_asprintf (&str, "%s%s=%s", prte_mca_prefix, var->mbv_full_name,
-                        value_string);
-        free (value_string);
-        if (0 > ret) {
-            goto cleanup;
-        }
-
-        prte_argv_append(num_env, env, str);
-        free(str);
-
-        switch (var->mbv_source) {
-        case PRTE_MCA_BASE_VAR_SOURCE_FILE:
-        case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
-            prte_asprintf (&str, "%sSOURCE_%s=FILE:%s", prte_mca_prefix, var->mbv_full_name,
-                      prte_mca_base_var_source_file (var));
-            break;
-        case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
-            prte_asprintf (&str, "%sSOURCE_%s=COMMAND_LINE", prte_mca_prefix, var->mbv_full_name);
-            break;
-        case PRTE_MCA_BASE_VAR_SOURCE_ENV:
-        case PRTE_MCA_BASE_VAR_SOURCE_SET:
-        case PRTE_MCA_BASE_VAR_SOURCE_DEFAULT:
-            str = NULL;
-            break;
-        case PRTE_MCA_BASE_VAR_SOURCE_MAX:
-            goto cleanup;
-        }
-
-        if (NULL != str) {
-            prte_argv_append(num_env, env, str);
-            free(str);
-        }
-    }
-
-    /* All done */
-
-    return PRTE_SUCCESS;
-
-    /* Error condition */
-
- cleanup:
-    if (*num_env > 0) {
-        prte_argv_free(*env);
-        *num_env = 0;
-        *env = NULL;
-    }
-    return PRTE_ERR_NOT_FOUND;
-}
-
-/*
- * Shut down the MCA parameter system (normally only invoked by the
- * MCA framework itself).
- */
-void prte_mca_base_var_finalize (void)
-{
-    prte_object_t *object;
-    prte_list_item_t *item;
-    int size, i;
-
-    if (prte_mca_base_var_initialized) {
-        size = prte_pointer_array_get_size(&prte_mca_base_vars);
-        for (i = 0 ; i < size ; ++i) {
-            object = prte_pointer_array_get_item (&prte_mca_base_vars, i);
-            if (NULL != object) {
-                PRTE_RELEASE(object);
-            }
-        }
-        PRTE_DESTRUCT(&prte_mca_base_vars);
-
-        while (NULL !=
-               (item = prte_list_remove_first(&prte_mca_base_var_file_values))) {
-            PRTE_RELEASE(item);
-        }
-        PRTE_DESTRUCT(&prte_mca_base_var_file_values);
-
-        while (NULL !=
-               (item = prte_list_remove_first(&prte_mca_base_envar_file_values))) {
-            PRTE_RELEASE(item);
-        }
-        PRTE_DESTRUCT(&prte_mca_base_envar_file_values);
-
-        while (NULL !=
-               (item = prte_list_remove_first(&prte_mca_base_var_override_values))) {
-            PRTE_RELEASE(item);
-        }
-        PRTE_DESTRUCT(&prte_mca_base_var_override_values);
-
-        prte_mca_base_var_initialized = false;
-        prte_mca_base_var_count = 0;
-
-        if (NULL != prte_mca_base_var_file_list) {
-            prte_argv_free(prte_mca_base_var_file_list);
-        }
-        prte_mca_base_var_file_list = NULL;
-
-        (void) prte_mca_base_var_group_finalize ();
-
-        PRTE_DESTRUCT(&prte_mca_base_var_index_hash);
-
-        free (prte_mca_base_envar_files);
-        prte_mca_base_envar_files = NULL;
-    }
-}
-
-
 /******************************************************************************/
 static int register_variable (const char *project_name, const char *framework_name,
                               const char *component_name, const char *variable_name,
@@ -1209,61 +1315,36 @@ static int register_variable (const char *project_name, const char *framework_na
     /* Developer error. Storage can not be NULL and type must exist */
     assert (((flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM) || NULL != storage) && type >= 0 && type < PRTE_MCA_BASE_VAR_TYPE_MAX);
 
-    /* Developer error: check max length of strings */
-    if (NULL != project_name &&
-        strlen(project_name) > PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-    if (NULL != framework_name &&
-        strlen(framework_name) > PRTE_MCA_BASE_MAX_TYPE_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-    if (NULL != component_name &&
-        strlen(component_name) > PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-    if (NULL != variable_name &&
-        strlen(variable_name) > PRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
 #if PRTE_ENABLE_DEBUG
     /* Developer error: check for alignments */
     uintptr_t align = 0;
     switch (type) {
-    case PRTE_MCA_BASE_VAR_TYPE_INT:
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
-        align = PRTE_ALIGNMENT_INT;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_INT32_T:
-    case PRTE_MCA_BASE_VAR_TYPE_UINT32_T:
-        align = PRTE_ALIGNMENT_INT32;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_INT64_T:
-    case PRTE_MCA_BASE_VAR_TYPE_UINT64_T:
-        align = PRTE_ALIGNMENT_INT64;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_LONG:
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
-        align = PRTE_ALIGNMENT_LONG;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
-        align = PRTE_ALIGNMENT_LONG_LONG;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
-        align = PRTE_ALIGNMENT_SIZE_T;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_BOOL:
-        align = PRTE_ALIGNMENT_BOOL;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
-        align = PRTE_ALIGNMENT_DOUBLE;
-        break;
-    case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
-    case PRTE_MCA_BASE_VAR_TYPE_STRING:
-    default:
-        align = 0;
-        break;
+        case PRTE_MCA_BASE_VAR_TYPE_INT:
+            align = PRTE_ALIGNMENT_INT;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
+            align = PRTE_ALIGNMENT_INT;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
+            align = PRTE_ALIGNMENT_LONG;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
+            align = PRTE_ALIGNMENT_LONG_LONG;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
+            align = PRTE_ALIGNMENT_SIZE_T;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_BOOL:
+            align = PRTE_ALIGNMENT_BOOL;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
+            align = PRTE_ALIGNMENT_DOUBLE;
+            break;
+        case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
+        case PRTE_MCA_BASE_VAR_TYPE_STRING:
+        default:
+            align = 0;
+            break;
     }
 
     if (0 != align) {
@@ -1271,13 +1352,16 @@ static int register_variable (const char *project_name, const char *framework_na
     }
 
     /* Also check to ensure that synonym_for>=0 when
-       MCA_BCASE_VAR_FLAG_SYNONYM is specified */
+     MCA_BCASE_VAR_FLAG_SYNONYM is specified */
     if (flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM && synonym_for < 0) {
         assert((flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM) && synonym_for >= 0);
     }
 #endif
 
     if (flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM) {
+        if (synonym_for < 0) {
+            return PRTE_ERR_BAD_PARAM;
+        }
         original = prte_pointer_array_get_item (&prte_mca_base_vars, synonym_for);
         if (NULL == original) {
             /* Attempting to create a synonym for a non-existent variable. probably a
@@ -1287,12 +1371,12 @@ static int register_variable (const char *project_name, const char *framework_na
         }
     }
 
-    /* There are data holes in the var struct */
-    PRTE_DEBUG_ZERO(var);
-
     /* Initialize the array if it has never been initialized */
     if (!prte_mca_base_var_initialized) {
-        prte_mca_base_var_init();
+        ret = prte_mca_base_var_init();
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
     }
 
     /* See if this entry is already in the array */
@@ -1302,7 +1386,7 @@ static int register_variable (const char *project_name, const char *framework_na
     if (0 > var_index) {
         /* Create a new parameter entry */
         group_index = prte_mca_base_var_group_register (project_name, framework_name, component_name,
-                                                   NULL);
+                                                        NULL);
         if (-1 > group_index) {
             return group_index;
         }
@@ -1324,7 +1408,7 @@ static int register_variable (const char *project_name, const char *framework_na
         var->mbv_type        = type;
         var->mbv_flags       = flags;
         var->mbv_group_index = group_index;
-        var->mbv_info_lvl    = info_lvl;
+        var->mbv_info_lvl  = info_lvl;
         var->mbv_scope       = scope;
         var->mbv_synonym_for = synonym_for;
         var->mbv_bind        = bind;
@@ -1333,28 +1417,32 @@ static int register_variable (const char *project_name, const char *framework_na
             var->mbv_description = strdup(description);
         }
 
-        ret = prte_mca_base_var_generate_full_name4 (project_name, framework_name, component_name,
-                                                      variable_name, &var->mbv_long_name);
+        if (NULL != variable_name) {
+            var->mbv_variable_name = strdup(variable_name);
+            if (NULL == var->mbv_variable_name) {
+                PRTE_RELEASE(var);
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+        }
+
+        ret = prte_mca_base_var_generate_full_name4 (NULL, framework_name, component_name,
+                                                     variable_name, &var->mbv_full_name);
         if (PRTE_SUCCESS != ret) {
             PRTE_RELEASE(var);
             return PRTE_ERROR;
         }
-        /* The mbv_full_name and the variable name are subset of the mbv_long_name
-         * so instead of allocating them we can just point into the var mbv_long_name
-         * at the right location.
-         */
-        var->mbv_full_name = var->mbv_long_name +
-                             (NULL == project_name ? 0 : (strlen(project_name)+1)); /* 1 for _ */
-        if( NULL != variable_name ) {
-            var->mbv_variable_name = var->mbv_full_name +
-                                     (NULL == framework_name ? 0 : (strlen(framework_name)+1)) +
-                                     (NULL == component_name ? 0 : (strlen(component_name)+1));
+
+        ret = prte_mca_base_var_generate_full_name4 (project_name, framework_name, component_name,
+                                                     variable_name, &var->mbv_long_name);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_RELEASE(var);
+            return PRTE_ERROR;
         }
 
         /* Add it to the array.  Note that we copy the mca_var_t by value,
-           so the entire contents of the struct is copied.  The synonym list
-           will always be empty at this point, so there's no need for an
-           extra RETAIN or RELEASE. */
+         so the entire contents of the struct is copied.  The synonym list
+         will always be empty at this point, so there's no need for an
+         extra RETAIN or RELEASE. */
         var_index = prte_pointer_array_add (&prte_mca_base_vars, var);
         if (0 > var_index) {
             PRTE_RELEASE(var);
@@ -1452,78 +1540,54 @@ static int register_variable (const char *project_name, const char *framework_na
 }
 
 int prte_mca_base_var_register (const char *project_name, const char *framework_name,
-                                 const char *component_name, const char *variable_name,
-                                 const char *description, prte_mca_base_var_type_t type,
-                                 prte_mca_base_var_enum_t *enumerator, int bind,
-                                 prte_mca_base_var_flag_t flags,
-                                 prte_mca_base_var_info_lvl_t info_lvl,
-                                 prte_mca_base_var_scope_t scope, void *storage)
+                                const char *component_name, const char *variable_name,
+                                const char *description, prte_mca_base_var_type_t type,
+                                prte_mca_base_var_enum_t *enumerator, int bind,
+                                prte_mca_base_var_flag_t flags,
+                                prte_mca_base_var_info_lvl_t info_lvl,
+                                prte_mca_base_var_scope_t scope, void *storage)
 {
-    int ret;
-
     /* Only integer variables can have enumerator */
     assert (NULL == enumerator || (PRTE_MCA_BASE_VAR_TYPE_INT == type || PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == type));
 
-    ret = register_variable (project_name, framework_name, component_name,
-                            variable_name, description, type, enumerator,
-                            bind, flags, info_lvl, scope, -1, storage);
-
-    if (PRTE_UNLIKELY(0 > ret)) {
-        return ret;
-    }
-
-    /* Register aliases if any exist */
-    const prte_mca_base_alias_t *alias = prte_mca_base_alias_lookup (project_name, framework_name, component_name);
-    if (NULL == alias) {
-        return ret;
-    }
-
-    PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t) {
-        prte_mca_base_var_syn_flag_t flags = PRTE_MCA_BASE_VAR_SYN_FLAG_NONE;
-        if (alias_item->alias_flags & PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED) {
-            flags = PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED;
-        }
-        (void) prte_mca_base_var_register_synonym (ret, project_name, framework_name,
-                                                   alias_item->component_alias,
-                                                   variable_name, flags);
-    }
-
-    return ret;
-
+    return register_variable (project_name, framework_name, component_name,
+                              variable_name, description, type, enumerator,
+                              bind, flags, info_lvl, scope, -1, storage);
 }
 
 int prte_mca_base_component_var_register (const prte_mca_base_component_t *component,
-                                           const char *variable_name, const char *description,
-                                           prte_mca_base_var_type_t type, prte_mca_base_var_enum_t *enumerator,
-                                           int bind, prte_mca_base_var_flag_t flags,
-                                           prte_mca_base_var_info_lvl_t info_lvl,
-                                           prte_mca_base_var_scope_t scope, void *storage)
+                                          const char *variable_name, const char *description,
+                                          prte_mca_base_var_type_t type, prte_mca_base_var_enum_t *enumerator,
+                                          int bind, prte_mca_base_var_flag_t flags,
+                                          prte_mca_base_var_info_lvl_t info_lvl,
+                                          prte_mca_base_var_scope_t scope, void *storage)
 {
-    return prte_mca_base_var_register (component->mca_project_name, component->mca_type_name,
-                                        component->mca_component_name,
-                                        variable_name, description, type, enumerator,
-                                        bind, flags | PRTE_MCA_BASE_VAR_FLAG_DWG,
-                                        info_lvl, scope, storage);
+    return prte_mca_base_var_register (component->mca_project_name,
+                                       component->mca_type_name,
+                                       component->mca_component_name,
+                                       variable_name, description, type, enumerator,
+                                       bind, flags | PRTE_MCA_BASE_VAR_FLAG_DWG,
+                                       info_lvl, scope, storage);
 }
 
 int prte_mca_base_framework_var_register (const prte_mca_base_framework_t *framework,
-                                           const char *variable_name,
-                                           const char *help_msg, prte_mca_base_var_type_t type,
-                                           prte_mca_base_var_enum_t *enumerator, int bind,
-                                           prte_mca_base_var_flag_t flags,
-                                           prte_mca_base_var_info_lvl_t info_level,
-                                           prte_mca_base_var_scope_t scope, void *storage)
+                                          const char *variable_name,
+                                          const char *help_msg, prte_mca_base_var_type_t type,
+                                          prte_mca_base_var_enum_t *enumerator, int bind,
+                                          prte_mca_base_var_flag_t flags,
+                                          prte_mca_base_var_info_lvl_t info_level,
+                                          prte_mca_base_var_scope_t scope, void *storage)
 {
     return prte_mca_base_var_register (framework->framework_project, framework->framework_name,
-                                        "base", variable_name, help_msg, type, enumerator, bind,
-                                        flags | PRTE_MCA_BASE_VAR_FLAG_DWG, info_level, scope, storage);
+                                       "base", variable_name, help_msg, type, enumerator, bind,
+                                       flags | PRTE_MCA_BASE_VAR_FLAG_DWG, info_level, scope, storage);
 }
 
 int prte_mca_base_var_register_synonym (int synonym_for, const char *project_name,
-                                         const char *framework_name,
-                                         const char *component_name,
-                                         const char *synonym_name,
-                                         prte_mca_base_var_syn_flag_t flags)
+                                        const char *framework_name,
+                                        const char *component_name,
+                                        const char *synonym_name,
+                                        prte_mca_base_var_syn_flag_t flags)
 {
     prte_mca_base_var_flag_t var_flags = (prte_mca_base_var_flag_t) PRTE_MCA_BASE_VAR_FLAG_SYNONYM;
     prte_mca_base_var_t *var;
@@ -1549,31 +1613,31 @@ int prte_mca_base_var_register_synonym (int synonym_for, const char *project_nam
 
 static int var_get_env (prte_mca_base_var_t *var, const char *name, char **source, char **value)
 {
-    const char source_prefix[] = "SOURCE_";
-    const int max_len = strlen(prte_mca_prefix) + strlen(source_prefix) +
-        strlen(name) + 1;
-    char *envvar = alloca(max_len);
-    if (NULL == envvar) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
+    (void)var;
+    char *source_env, *value_env;
     int ret;
-    ret = snprintf(envvar, max_len, "%s%s", prte_mca_prefix, name);
+
+    ret = asprintf (&source_env, "%sSOURCE_%s", mca_prefix, name);
     if (0 > ret) {
         return PRTE_ERROR;
     }
-    *value = getenv(envvar);
-    if( NULL == *value ) {
+
+    ret = asprintf (&value_env, "%s%s", mca_prefix, name);
+    if (0 > ret) {
+        free (source_env);
+        return PRTE_ERROR;
+    }
+
+    *source = getenv (source_env);
+    *value = getenv (value_env);
+
+    free (source_env);
+    free (value_env);
+
+    if (NULL == *value) {
         *source = NULL;
         return PRTE_ERR_NOT_FOUND;
     }
-
-    ret = snprintf(envvar, max_len, "%s%s%s", prte_mca_prefix,
-                   source_prefix, name);
-    if( 0 > ret ) {
-        return PRTE_ERROR;
-    }
-    *source = getenv(envvar);
 
     return PRTE_SUCCESS;
 }
@@ -1600,7 +1664,7 @@ static int var_set_from_env (prte_mca_base_var_t *var, prte_mca_base_var_t *orig
     }
 
     /* we found an environment variable but this variable is default-only. print
-       a warning. */
+     a warning. */
     if (PRTE_VAR_IS_DEFAULT_ONLY(original[0])) {
         prte_show_help("help-prte-mca-var.txt", "default-only-param-set",
                        true, var_full_name);
@@ -1622,8 +1686,7 @@ static int var_set_from_env (prte_mca_base_var_t *var, prte_mca_base_var_t *orig
     if (NULL != source_env) {
         if (0 == strncasecmp (source_env, "file:", 5)) {
             original->mbv_source_file = append_filename_to_list(source_env + 5);
-            if (NULL != prte_mca_base_var_override_file &&
-                0 == strcmp (var->mbv_source_file, prte_mca_base_var_override_file)) {
+            if (0 == strcmp (var->mbv_source_file, prte_mca_base_var_override_file)) {
                 original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE;
             } else {
                 original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_FILE;
@@ -1637,30 +1700,30 @@ static int var_set_from_env (prte_mca_base_var_t *var, prte_mca_base_var_t *orig
         const char *new_variable = "None (going away)";
 
         if (is_synonym) {
-            new_variable = original->mbv_full_name;
+            new_variable = var->mbv_full_name;
         }
 
         switch (var->mbv_source) {
-        case PRTE_MCA_BASE_VAR_SOURCE_ENV:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-env",
-                           true, var_full_name, new_variable);
-            break;
-        case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-cli",
-                           true, var_full_name, new_variable);
-            break;
-        case PRTE_MCA_BASE_VAR_SOURCE_FILE:
-        case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-file",
-                           true, var_full_name, prte_mca_base_var_source_file (var),
-                           new_variable);
-            break;
+            case PRTE_MCA_BASE_VAR_SOURCE_ENV:
+                prte_show_help("help-prte-mca-var.txt", "deprecated-mca-env",
+                               true, var_full_name, new_variable);
+                break;
+            case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
+                prte_show_help("help-prte-mca-var.txt", "deprecated-mca-cli",
+                               true, var_full_name, new_variable);
+                break;
+            case PRTE_MCA_BASE_VAR_SOURCE_FILE:
+            case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
+                prte_show_help("help-prte-mca-var.txt", "deprecated-mca-file",
+                               true, var_full_name, prte_mca_base_var_source_file (var),
+                               new_variable);
+                break;
 
-        case PRTE_MCA_BASE_VAR_SOURCE_DEFAULT:
-        case PRTE_MCA_BASE_VAR_SOURCE_MAX:
-        case PRTE_MCA_BASE_VAR_SOURCE_SET:
-            /* silence compiler warnings about unhandled enumerations */
-            break;
+            case PRTE_MCA_BASE_VAR_SOURCE_DEFAULT:
+            case PRTE_MCA_BASE_VAR_SOURCE_MAX:
+            case PRTE_MCA_BASE_VAR_SOURCE_SET:
+                /* silence compiler warnings about unhandled enumerations */
+                break;
         }
     }
 
@@ -1679,8 +1742,8 @@ static int var_set_from_file (prte_mca_base_var_t *var, prte_mca_base_var_t *ori
     prte_mca_base_var_file_value_t *fv;
 
     /* Scan through the list of values read in from files and try to
-       find a match.  If we do, cache it on the param (for future
-       lookups) and save it in the storage. */
+     find a match.  If we do, cache it on the param (for future
+     lookups) and save it in the storage. */
 
     PRTE_LIST_FOREACH(fv, file_values, prte_mca_base_var_file_value_t) {
         if (0 != strcmp(fv->mbvfv_var, var_full_name) &&
@@ -1756,9 +1819,9 @@ static int var_set_initial (prte_mca_base_var_t *var, prte_mca_base_var_t *origi
     }
 
     /* Check all the places that the param may be hiding, in priority
-       order. If the default only flag is set the user will get a
-       warning if they try to set a value from the environment or a
-       file. */
+     order. If the default only flag is set the user will get a
+     warning if they try to set a value from the environment or a
+     file. */
     ret = var_set_from_file (var, original, &prte_mca_base_var_override_values);
     if (PRTE_SUCCESS == ret) {
         var->mbv_flags = ~PRTE_MCA_BASE_VAR_FLAG_SETTABLE & (var->mbv_flags | PRTE_MCA_BASE_VAR_FLAG_OVERRIDE);
@@ -1810,13 +1873,17 @@ static void var_destructor(prte_mca_base_var_t *var)
     }
 
     /* don't release the boolean enumerator */
-    PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
+    PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var->mbv_enumerator);
 
+    if (NULL != var->mbv_variable_name) {
+        free(var->mbv_variable_name);
+    }
+    if (NULL != var->mbv_full_name) {
+        free(var->mbv_full_name);
+    }
     if (NULL != var->mbv_long_name) {
         free(var->mbv_long_name);
     }
-    var->mbv_full_name = NULL;
-    var->mbv_variable_name = NULL;
 
     if (NULL != var->mbv_description) {
         free(var->mbv_description);
@@ -1862,12 +1929,12 @@ static char *source_name(prte_mca_base_var_t *var)
         int rc;
 
         if (fv) {
-            rc = prte_asprintf(&ret, "file (%s:%d)", fv->mbvfv_file, fv->mbvfv_lineno);
+            rc = asprintf(&ret, "file (%s:%d)", fv->mbvfv_file, fv->mbvfv_lineno);
         } else {
-            rc = prte_asprintf(&ret, "file (%s)", var->mbv_source_file);
+            rc = asprintf(&ret, "file (%s)", var->mbv_source_file);
         }
 
-        /* some compilers will warn if the return code of prte_asprintf is not checked (even if it is cast to void) */
+        /* some compilers will warn if the return code of asprintf is not checked (even if it is cast to void) */
         if (0 > rc) {
             return NULL;
         }
@@ -1881,18 +1948,10 @@ static char *source_name(prte_mca_base_var_t *var)
 
 static int var_value_string (prte_mca_base_var_t *var, char **value_string)
 {
-    const prte_mca_base_var_storage_t *value=NULL;
+    prte_mca_base_var_storage_t *value=NULL;
     int ret;
 
     assert (PRTE_MCA_BASE_VAR_TYPE_MAX > var->mbv_type);
-
-    /** Parameters with MCA_BASE_VAR_FLAG_DEF_UNSET flag should be shown
-     * as "unset" by default. */
-    if ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_DEF_UNSET) &&
-        (PRTE_MCA_BASE_VAR_SOURCE_DEFAULT == var->mbv_source)){
-        prte_asprintf (value_string, "%s", "unset");
-        return PRTE_SUCCESS;
-    }
 
     ret = prte_mca_base_var_get_value(var->mbv_index, &value, NULL, NULL);
     if (PRTE_SUCCESS != ret || NULL == value) {
@@ -1901,50 +1960,35 @@ static int var_value_string (prte_mca_base_var_t *var, char **value_string)
 
     if (NULL == var->mbv_enumerator) {
         switch (var->mbv_type) {
-        case PRTE_MCA_BASE_VAR_TYPE_INT:
-            ret = prte_asprintf (value_string, "%d", value->intval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_INT32_T:
-            ret = prte_asprintf (value_string, "%" PRId32, value->int32tval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_UINT32_T:
-            ret = prte_asprintf (value_string, "%" PRIu32, value->uint32tval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_INT64_T:
-            ret = prte_asprintf (value_string, "%" PRId64, value->int64tval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_UINT64_T:
-            ret = prte_asprintf (value_string, "%" PRIu64, value->uint64tval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_LONG:
-            ret = prte_asprintf (value_string, "%ld", value->longval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
-            ret = prte_asprintf (value_string, "%u", value->uintval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
-            ret = prte_asprintf (value_string, "%lu", value->ulval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
-            ret = prte_asprintf (value_string, "%llu", value->ullval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
-            ret = prte_asprintf (value_string, "%" PRIsize_t, value->sizetval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_STRING:
-        case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
-            ret = prte_asprintf (value_string, "%s",
-                            value->stringval ? value->stringval : "");
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_BOOL:
-            ret = prte_asprintf (value_string, "%d", value->boolval);
-            break;
-        case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
-            ret = prte_asprintf (value_string, "%lf", value->lfval);
-            break;
-        default:
-            ret = -1;
-            break;
+            case PRTE_MCA_BASE_VAR_TYPE_INT:
+                ret = asprintf (value_string, "%d", value->intval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
+                ret = asprintf (value_string, "%u", value->uintval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
+                ret = asprintf (value_string, "%lu", value->ulval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
+                ret = asprintf (value_string, "%llu", value->ullval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
+                ret = asprintf (value_string, "%" PRIsize_t, value->sizetval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_STRING:
+            case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
+                ret = asprintf (value_string, "%s",
+                                value->stringval ? value->stringval : "");
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_BOOL:
+                ret = asprintf (value_string, "%d", value->boolval);
+                break;
+            case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
+                ret = asprintf (value_string, "%lf", value->lfval);
+                break;
+            default:
+                ret = -1;
+                break;
         }
 
         ret = (0 > ret) ? PRTE_ERR_OUT_OF_RESOURCE : PRTE_SUCCESS;
@@ -1955,18 +1999,22 @@ static int var_value_string (prte_mca_base_var_t *var, char **value_string)
         } else {
             ret = var->mbv_enumerator->string_from_value(var->mbv_enumerator, value->intval, value_string);
         }
+
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
     }
 
     return ret;
 }
 
 int prte_mca_base_var_check_exclusive (const char *project,
-                                        const char *type_a,
-                                        const char *component_a,
-                                        const char *param_a,
-                                        const char *type_b,
-                                        const char *component_b,
-                                        const char *param_b)
+                                       const char *type_a,
+                                       const char *component_a,
+                                       const char *param_a,
+                                       const char *type_b,
+                                       const char *component_b,
+                                       const char *param_b)
 {
     prte_mca_base_var_t *var_a = NULL, *var_b = NULL;
     int var_ai, var_bi;
@@ -2074,7 +2122,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         }
 
         line_count = 8 + (var->mbv_description ? 1 : 0) + (PRTE_VAR_IS_SYNONYM(var[0]) ? 1 : synonym_count) +
-            enum_count;
+        enum_count;
 
         *out = (char **) calloc (line_count + 1, sizeof (char *));
         if (NULL == *out) {
@@ -2084,30 +2132,46 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         }
 
         /* build the message*/
-        prte_asprintf(&tmp, "mca:%s:%s:param:%s:", framework, component,
-                 full_name);
+        ret = asprintf(&tmp, "mca:%s:%s:param:%s:", framework, component, full_name);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         /* Output the value */
         char *colon = strchr(value_string, ':');
         if (NULL != colon) {
-            prte_asprintf(out[0] + line++, "%svalue:\"%s\"", tmp, value_string);
+            ret = asprintf(out[0] + line++, "%svalue:\"%s\"", tmp, value_string);
         } else {
-            prte_asprintf(out[0] + line++, "%svalue:%s", tmp, value_string);
+            ret = asprintf(out[0] + line++, "%svalue:%s", tmp, value_string);
+        }
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
         /* Output the source */
-        prte_asprintf(out[0] + line++, "%ssource:%s", tmp, source_string);
+        ret = asprintf(out[0] + line++, "%ssource:%s", tmp, source_string);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         /* Output whether it's read only or writable */
-        prte_asprintf(out[0] + line++, "%sstatus:%s", tmp,
-                      PRTE_VAR_IS_SETTABLE(var[0]) ? "writeable" : "read-only");
+        ret = asprintf(out[0] + line++, "%sstatus:%s", tmp, PRTE_VAR_IS_DEFAULT_ONLY(var[0]) ? "read-only" : "writeable");
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         /* Output the info level of this parametere */
-        prte_asprintf(out[0] + line++, "%slevel:%d", tmp, var->mbv_info_lvl + 1);
+        ret = asprintf(out[0] + line++, "%slevel:%d", tmp, var->mbv_info_lvl + 1);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         /* If it has a help message, output the help message */
         if (var->mbv_description) {
-            prte_asprintf(out[0] + line++, "%shelp:%s", tmp, var->mbv_description);
+            ret = asprintf(out[0] + line++, "%shelp:%s", tmp, var->mbv_description);
+        }
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
         if (NULL != var->mbv_enumerator) {
@@ -2121,18 +2185,30 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
                     continue;
                 }
 
-                prte_asprintf(out[0] + line++, "%senumerator:value:%d:%s", tmp, enum_value, enum_string);
+                ret = asprintf(out[0] + line++, "%senumerator:value:%d:%s", tmp, enum_value, enum_string);
+                if (0 > ret) {
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
             }
         }
 
         /* Is this variable deprecated? */
-        prte_asprintf(out[0] + line++, "%sdeprecated:%s", tmp, PRTE_VAR_IS_DEPRECATED(var[0]) ? "yes" : "no");
+        ret = asprintf(out[0] + line++, "%sdeprecated:%s", tmp, PRTE_VAR_IS_DEPRECATED(var[0]) ? "yes" : "no");
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
-        prte_asprintf(out[0] + line++, "%stype:%s", tmp, prte_var_type_names[var->mbv_type]);
+        ret = asprintf(out[0] + line++, "%stype:%s", tmp, prte_var_type_names[var->mbv_type]);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         /* Does this parameter have any synonyms or is it a synonym? */
         if (PRTE_VAR_IS_SYNONYM(var[0])) {
-            prte_asprintf(out[0] + line++, "%ssynonym_of:name:%s", tmp, original->mbv_full_name);
+            ret = asprintf(out[0] + line++, "%ssynonym_of:name:%s", tmp, original->mbv_full_name);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
         } else if (prte_value_array_get_size(&var->mbv_synonyms)) {
             for (i = 0 ; i < synonym_count ; ++i) {
                 prte_mca_base_var_t *synonym;
@@ -2142,7 +2218,10 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
                     continue;
                 }
 
-                prte_asprintf(out[0] + line++, "%ssynonym:name:%s", tmp, synonym->mbv_full_name);
+                ret = asprintf(out[0] + line++, "%ssynonym:name:%s", tmp, synonym->mbv_full_name);
+                if (0 > ret) {
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
             }
         }
 
@@ -2156,25 +2235,37 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        prte_asprintf (out[0], "%s \"%s\" (current value: \"%s\", data source: %s, level: %d %s, type: %s",
-                  PRTE_VAR_IS_DEFAULT_ONLY(var[0]) ? "informational" : "parameter",
-                  full_name, value_string, source_string, var->mbv_info_lvl + 1,
-                  prte_info_lvl_strings[var->mbv_info_lvl], prte_var_type_names[var->mbv_type]);
+        ret = asprintf (out[0], "%s \"%s\" (current value: \"%s\", data source: %s, level: %d %s, type: %s",
+                        PRTE_VAR_IS_DEFAULT_ONLY(var[0]) ? "informational" : "parameter",
+                        full_name, value_string, source_string, var->mbv_info_lvl + 1,
+                        info_lvl_strings[var->mbv_info_lvl], prte_var_type_names[var->mbv_type]);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
 
         tmp = out[0][0];
         if (PRTE_VAR_IS_DEPRECATED(var[0])) {
-            prte_asprintf (out[0], "%s, deprecated", tmp);
+            ret = asprintf (out[0], "%s, deprecated", tmp);
             free (tmp);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
             tmp = out[0][0];
         }
 
         /* Does this parameter have any synonyms or is it a synonym? */
         if (PRTE_VAR_IS_SYNONYM(var[0])) {
-            prte_asprintf(out[0], "%s, synonym of: %s)", tmp, original->mbv_full_name);
+            ret = asprintf(out[0], "%s, synonym of: %s)", tmp, original->mbv_full_name);
             free (tmp);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
         } else if (synonym_count) {
-            prte_asprintf(out[0], "%s, synonyms: ", tmp);
+            ret = asprintf(out[0], "%s, synonyms: ", tmp);
             free (tmp);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
 
             for (i = 0 ; i < synonym_count ; ++i) {
                 prte_mca_base_var_t *synonym;
@@ -2186,21 +2277,30 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
 
                 tmp = out[0][0];
                 if (synonym_count == i+1) {
-                    prte_asprintf(out[0], "%s%s)", tmp, synonym->mbv_full_name);
+                    ret = asprintf(out[0], "%s%s)", tmp, synonym->mbv_full_name);
                 } else {
-                    prte_asprintf(out[0], "%s%s, ", tmp, synonym->mbv_full_name);
+                    ret = asprintf(out[0], "%s%s, ", tmp, synonym->mbv_full_name);
                 }
                 free(tmp);
+                if (0 > ret) {
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
             }
         } else {
-            prte_asprintf(out[0], "%s)", tmp);
+            ret = asprintf(out[0], "%s)", tmp);
             free(tmp);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
         }
 
         line++;
 
         if (var->mbv_description) {
-            prte_asprintf(out[0] + line++, "%s", var->mbv_description);
+            ret = asprintf(out[0] + line++, "%s", var->mbv_description);
+            if (0 > ret) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
         }
 
         if (NULL != var->mbv_enumerator) {
@@ -2208,8 +2308,11 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
 
             ret = var->mbv_enumerator->dump(var->mbv_enumerator, &values);
             if (PRTE_SUCCESS == ret) {
-                prte_asprintf (out[0] + line++, "Valid values: %s", values);
+                ret = asprintf (out[0] + line++, "Valid values: %s", values);
                 free (values);
+                if (0 > ret) {
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
             }
         }
     } else if (PRTE_MCA_BASE_VAR_DUMP_SIMPLE == output_type) {
@@ -2220,7 +2323,10 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        prte_asprintf(out[0], "%s=%s (%s)", var->mbv_full_name, value_string, source_string);
+        ret = asprintf(out[0], "%s=%s (%s)", var->mbv_full_name, value_string, source_string);
+        if (0 > ret) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
     }
 
     free (value_string);

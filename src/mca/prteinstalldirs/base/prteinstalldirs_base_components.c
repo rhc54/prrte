@@ -6,6 +6,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -119,7 +120,7 @@ prte_prteinstalldirs_base_open(prte_mca_base_open_flag_t flags)
     prte_install_dirs.prteincludedir =
         prte_install_dirs_expand_setup(prte_install_dirs.prteincludedir);
 
-#if 0
+#if 1
     fprintf(stderr, "prefix:           %s\n", prte_install_dirs.prefix);
     fprintf(stderr, "exec_prefix:      %s\n", prte_install_dirs.exec_prefix);
     fprintf(stderr, "bindir:           %s\n", prte_install_dirs.bindir);

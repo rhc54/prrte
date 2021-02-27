@@ -50,6 +50,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
@@ -637,7 +638,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
             if (prte_path_is_absolute(tmp[i])) {
-                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);
+                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);
                 prte_argv_free(tmp);
                 prte_argv_free(cache);
                 prte_argv_free(cachevals);
@@ -645,18 +646,35 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 prte_argv_free(xvals);
                 return PRTE_ERR_NOT_FOUND;
             }
-            p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
+            p1 = prte_os_path(false, prte_install_dirs.sysconfdir, "amca-param-sets", tmp[i], NULL);
             fp = fopen(p1, "r");
             if (NULL == fp) {
-                prte_show_help("help-schizo-base.txt", "missing-param-file-def", true,
-                               tmp[i], DEFAULT_PARAM_FILE_PATH);
-                prte_argv_free(tmp);
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
-                free(p1);
-                return PRTE_ERR_NOT_FOUND;
+                /* check in their home conf directory */
+                line = (char*)prte_home_directory();
+                if (NULL == line) {
+                    prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);
+                    prte_argv_free(tmp);
+                    prte_argv_free(cache);
+                    prte_argv_free(cachevals);
+                    prte_argv_free(xparams);
+                    prte_argv_free(xvals);
+                    free(p1);
+                    return PRTE_ERR_NOT_FOUND;
+                }
+                p2 = prte_os_path(false, line, ".prte", tmp[i], NULL);
+                fp = fopen(p2, "r");
+                if (NULL == fp) {
+                    prte_show_help("help-schizo-base.txt", "missing-param-file-def2", true, tmp[i], p1, p2);
+                    prte_argv_free(tmp);
+                    prte_argv_free(cache);
+                    prte_argv_free(cachevals);
+                    prte_argv_free(xparams);
+                    prte_argv_free(xvals);
+                    free(p1);
+                    free(p2);
+                    return PRTE_ERR_NOT_FOUND;
+                }
+                free(p2);
             }
             free(p1);
         }

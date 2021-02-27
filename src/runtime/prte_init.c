@@ -46,6 +46,7 @@
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 #include "src/util/stacktrace.h"
 #include "src/util/sys_limits.h"
@@ -56,6 +57,7 @@
 
 #include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/base/base.h"
+#include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/errmgr/base/base.h"
@@ -123,9 +125,6 @@ int prte_init_util(prte_proc_type_t flags)
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
 
-    /* set the nodename right away so anyone who needs it has it */
-    prte_setup_hostname();
-
     /* initialize the memory allocator */
     prte_malloc_init();
 
@@ -153,6 +152,9 @@ int prte_init_util(prte_proc_type_t flags)
         error = "mca_base_var_init";
         goto error;
     }
+
+    /* set the nodename right away so anyone who needs it has it */
+    prte_setup_hostname();
 
     if (PRTE_SUCCESS != (ret = prte_net_init())) {
         error = "prte_net_init";

@@ -16,6 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,11 +42,10 @@ static char *key_buffer = NULL;
 static size_t key_buffer_len = 0;
 static prte_mutex_t keyval_mutex;
 
-static int parse_line(const char *filename, char ***dstenv,
+static int parse_line(const char *filename,
                       prte_keyval_parse_fn_t callback);
 static int parse_line_new(const char *filename,
                           prte_keyval_parse_state_t first_val,
-                          char ***dstenv,
                           prte_keyval_parse_fn_t callback);
 static void parse_error(int num, const char *filename);
 
@@ -69,7 +69,7 @@ int prte_util_keyval_parse_init(void)
 }
 
 int
-prte_util_keyval_parse(const char *filename, char ***dstenv,
+prte_util_keyval_parse(const char *filename,
                        prte_keyval_parse_fn_t callback)
 {
     int val;
@@ -100,13 +100,13 @@ prte_util_keyval_parse(const char *filename, char ***dstenv,
             break;
 
         case PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD:
-            parse_line(filename, dstenv, callback);
+            parse_line(filename, callback);
             break;
 
         case PRTE_UTIL_KEYVAL_PARSE_MCAVAR:
         case PRTE_UTIL_KEYVAL_PARSE_ENVVAR:
         case PRTE_UTIL_KEYVAL_PARSE_ENVEQL:
-            parse_line_new(filename, val, dstenv, callback);
+            parse_line_new(filename, val, callback);
             break;
 
         default:
@@ -125,7 +125,7 @@ cleanup:
 
 
 
-static int parse_line(const char *filename, char ***dstenv,
+static int parse_line(const char *filename,
                       prte_keyval_parse_fn_t callback)
 {
     int val;
@@ -161,7 +161,7 @@ static int parse_line(const char *filename, char ***dstenv,
     val = prte_util_keyval_yylex();
     if (PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD == val ||
         PRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
-        callback(key_buffer, prte_util_keyval_yytext, dstenv);
+        callback(key_buffer, prte_util_keyval_yytext);
 
         /* Now we need to see the newline */
 
@@ -176,7 +176,7 @@ static int parse_line(const char *filename, char ***dstenv,
 
     else if (PRTE_UTIL_KEYVAL_PARSE_DONE == val ||
              PRTE_UTIL_KEYVAL_PARSE_NEWLINE == val) {
-        callback(key_buffer, NULL, dstenv);
+        callback(key_buffer, NULL);
         return PRTE_SUCCESS;
     }
 
@@ -191,6 +191,16 @@ static void parse_error(int num, const char *filename)
     /* JMS need better error/warning message here */
     prte_output(0, "keyval parser: error %d reading file %s at line %d:\n  %s\n",
                 num, filename, prte_util_keyval_yynewlines, prte_util_keyval_yytext);
+}
+
+int prte_util_keyval_save_internal_envars(prte_keyval_parse_fn_t callback)
+{
+    if (NULL != env_str && 0 < strlen(env_str)) {
+        callback("mca_base_env_list_internal", env_str);
+        free(env_str);
+        env_str = NULL;
+    }
+    return PRTE_SUCCESS;
 }
 
 static void trim_name(char *buffer, const char* prefix, const char* suffix)
@@ -322,7 +332,6 @@ static int add_to_env_str(char *var, char *val)
 
 static int parse_line_new(const char *filename,
                           prte_keyval_parse_state_t first_val,
-                          char ***dstenv,
                           prte_keyval_parse_fn_t callback)
 {
     prte_keyval_parse_state_t val;
@@ -348,7 +357,7 @@ static int parse_line_new(const char *filename,
                         trim_name (tmp, "\'", "\'");
                         trim_name (tmp, "\"", "\"");
                     }
-                    callback(key_buffer, tmp, dstenv);
+                    callback(key_buffer, tmp);
                     free(tmp);
                 }
             } else {

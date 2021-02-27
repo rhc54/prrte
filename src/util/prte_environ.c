@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,6 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pwd.h>
+#include <unistd.h>
 
 #include "src/util/printf.h"
 #include "src/util/argv.h"
@@ -262,6 +265,12 @@ const char* prte_tmp_directory( void )
 const char* prte_home_directory( void )
 {
     char* home = getenv("HOME");
+
+    if (NULL == home) {
+        uid_t uid = geteuid();
+        struct passwd *pw = getpwuid(uid);
+        home = pw->pw_dir;
+    }
 
     return home;
 }

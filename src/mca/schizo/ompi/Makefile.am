@@ -10,9 +10,6 @@
 # $HEADER$
 #
 
-AM_CFLAGS = \
-            -DDEFAULT_PARAM_FILE_PATH="\"@AMCA_PARAM_SETS_DIR@\""
-
 sources = \
           schizo_ompi_component.c \
           schizo_ompi.h \

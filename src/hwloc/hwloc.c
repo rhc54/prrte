@@ -116,6 +116,7 @@ int prte_hwloc_base_register(void)
                                 "will abort the job if this happens.",
                                 PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
+    prte_output(0, "MBFA %d", prte_hwloc_base_mbfa);
     PRTE_RELEASE(new_enum);
     if (0 > ret) {
         return ret;

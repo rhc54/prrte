@@ -152,6 +152,8 @@ PRTE_EXPORT int prte_mca_base_var_group_finalize (void);
 
 PRTE_EXPORT int prte_mca_base_parse_paramfile(const char *paramfile,
                                               prte_list_t *list);
+PRTE_EXPORT int prte_mca_base_internal_env_store(void);
+PRTE_EXPORT int prte_mca_base_cache_files(bool rel_path_search);
 
 END_C_DECLS
 

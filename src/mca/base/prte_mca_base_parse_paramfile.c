@@ -31,6 +31,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/util/keyval_parse.h"
+#include "src/util/output.h"
 
 static void save_value(const char *name, const char *value);
 
@@ -41,7 +42,7 @@ int prte_mca_base_parse_paramfile(const char *paramfile, prte_list_t *list)
 {
     file_being_read = (char*)paramfile;
     _param_list = list;
-
+    prte_output(0, "PARSING: %s", paramfile);
     return prte_util_keyval_parse(paramfile, save_value);
 }
 
@@ -59,7 +60,7 @@ static void save_value(const char *name, const char *value)
        already have a param of this name.  If we do, just replace the
        value. */
 
-    prte_LIST_FOREACH(fv, _param_list, prte_mca_base_var_file_value_t) {
+    PRTE_LIST_FOREACH(fv, _param_list, prte_mca_base_var_file_value_t) {
         if (0 == strcmp(name, fv->mbvfv_var)) {
             if (NULL != fv->mbvfv_value) {
                 free (fv->mbvfv_value);
@@ -71,11 +72,11 @@ static void save_value(const char *name, const char *value)
 
     if (!found) {
         /* We didn't already have the param, so append it to the list */
-        fv = prte_NEW(prte_mca_base_var_file_value_t);
+        fv = PRTE_NEW(prte_mca_base_var_file_value_t);
         if (NULL == fv) {
             return;
         }
-
+        prte_output(0, "ADDING %s FROM %s:%d", name, file_being_read, prte_util_keyval_parse_lineno);
         fv->mbvfv_var = strdup(name);
         prte_list_append(_param_list, &fv->super);
     }

@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +41,7 @@ extern int prte_util_keyval_parse_lineno;
  * The buffers must not be free()ed and contents may be overwritten
  * immediately after the callback returns.
  */
-typedef void (*prte_keyval_parse_fn_t)(const char *key, const char *value, char ***dstenv);
+typedef void (*prte_keyval_parse_fn_t)(const char *key, const char *value);
 
 /**
  * Parse \c filename, made up of key = value pairs.
@@ -50,12 +51,14 @@ typedef void (*prte_keyval_parse_fn_t)(const char *key, const char *value, char 
  * called exactly once.  In a multithreaded context, calls to
  * prte_util_keyval_parse() will serialize multiple calls.
  */
-PRTE_EXPORT int prte_util_keyval_parse(const char *filename, char ***dstenv,
+PRTE_EXPORT int prte_util_keyval_parse(const char *filename,
                                          prte_keyval_parse_fn_t callback);
 
 PRTE_EXPORT int prte_util_keyval_parse_init(void);
 
 PRTE_EXPORT void prte_util_keyval_parse_finalize (void);
+
+PRTE_EXPORT int prte_util_keyval_save_internal_envars(prte_keyval_parse_fn_t callback);
 
 END_C_DECLS
 

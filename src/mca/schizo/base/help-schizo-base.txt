@@ -19,6 +19,14 @@ Unable to locate the variable file:
 either relative to the current working directory
 or in the default location:
    %s
+[missing-param-file-def]
+Unable to locate the variable file:
+   %s
+either relative to the current working directory
+or in the system default location:
+   %s
+or in your home default location:
+   %s
 #
 [bad-param-line]
 Parsing error in variable file:
