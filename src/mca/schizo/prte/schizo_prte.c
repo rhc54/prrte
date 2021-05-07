@@ -927,7 +927,15 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
 
 static int detect_proxy(char *cmdpath)
 {
-    char *mybasename;
+    char *mydirname;
+    char *prtetools[] = {
+        "prte",
+        "prun",
+        "pterm",
+        NULL
+    };
+    bool ourtool;
+    int n;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -948,15 +956,24 @@ static int detect_proxy(char *cmdpath)
         }
     }
 
-    /* if it is not a symlink and is in our install path,
-     * then it belongs to us */
-    mybasename = prte_basename(cmdpath);
-    if (0 == strcmp(mybasename, prte_tool_basename)
-        && NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
-        free(mybasename);
-        return 100;
+    ourtool = false;
+    for (n=0; NULL != prtetools[n]; n++) {
+        if (0 == strcmp(prte_tool_basename, prtetools[n])) {
+            ourtool = true;
+            break;
+        }
     }
-    free(mybasename);
+
+    if (ourtool) {
+        /* if it is not a symlink and is in our install path,
+         * then it belongs to us */
+        mydirname = prte_dirname(cmdpath);
+        n = strcmp(mydirname, prte_install_dirs.bindir)
+        free(mydirname);
+        if (0 == n) {
+            return 100;
+        }
+    }
 
     /* we are always the lowest priority */
     return prte_schizo_prte_component.priority;
