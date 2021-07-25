@@ -51,6 +51,7 @@ int prte_finalize(void)
 {
     int rc, n;
     prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
+    prte_job_grp_t *g;
 
     PRTE_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
@@ -101,6 +102,15 @@ int prte_finalize(void)
         PRTE_RELEASE(jdata);
     }
     PRTE_RELEASE(prte_job_data);
+
+    for (n = 0; n < prte_job_grps->size; n++) {
+        g = (prte_job_grp_t*)prte_pointer_array_get_item(prte_job_grps, n);
+        if (NULL == g) {
+            continue;
+        }
+        PRTE_RELEASE(g);
+    }
+    PRTE_RELEASE(prte_job_grps);
 
     {
         prte_pointer_array_t *array = prte_node_topologies;

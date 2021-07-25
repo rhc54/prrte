@@ -290,28 +290,36 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* setup the global job and node arrays */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        error = "setup job array";
+        goto error;
+    }
+    prte_job_grps = PRTE_NEW(prte_pointer_array_t);
+    ret = prte_pointer_array_init(prte_job_data, 1,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE, 1);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
     prte_node_pool = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
     prte_node_topologies = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "setup node topologies array";
         goto error;

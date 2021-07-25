@@ -301,12 +301,21 @@ typedef struct {
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_node_t);
 
 typedef struct {
+    prte_object_t super;
+    prte_pointer_array_t jobs;
+} prte_job_grp_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_grp_t);
+
+
+typedef struct {
     /** Base object so this can be put on a list */
     prte_list_item_t super;
     /* record the exit status for this job */
     int exit_code;
     /* personality for this job */
     char **personality;
+    /* track if we are part of a job group */
+    prte_job_grp_t *grp;
     /* jobid for this job */
     pmix_nspace_t nspace;
     int index; // index in the job array where this is stored
@@ -546,6 +555,7 @@ PRTE_EXPORT extern prte_timer_t *prte_mpiexec_timeout;
 
 /* global arrays for data storage */
 PRTE_EXPORT extern prte_pointer_array_t *prte_job_data;
+PRTE_EXPORT extern prte_pointer_array_t *prte_job_grps;
 PRTE_EXPORT extern prte_pointer_array_t *prte_node_pool;
 PRTE_EXPORT extern prte_pointer_array_t *prte_node_topologies;
 PRTE_EXPORT extern prte_pointer_array_t *prte_local_children;

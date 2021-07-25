@@ -119,6 +119,7 @@ int prte_stack_trace_wait_timeout = 30;
 
 /* global arrays for data storage */
 prte_pointer_array_t *prte_job_data = NULL;
+prte_pointer_array_t *prte_job_grps = NULL;
 prte_pointer_array_t *prte_node_pool = NULL;
 prte_pointer_array_t *prte_node_topologies = NULL;
 prte_pointer_array_t *prte_local_children = NULL;
@@ -452,10 +453,35 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
 PRTE_CLASS_INSTANCE(prte_app_context_t, prte_object_t, prte_app_context_construct,
                     prte_app_context_destructor);
 
+static void prte_job_grp_construct(prte_job_grp_t *g)
+{
+    PRTE_CONSTRUCT(&g->jobs, prte_pointer_array_t);
+    prte_pointer_array_init(&g->jobs, 1, INT_MAX, 1);
+}
+static void prte_job_grp_destruct(prte_job_grp_t *g)
+{
+    prte_job_t *job;
+    int i;
+
+    for (i=0; i < g->jobs.size; i++) {
+        job = (prte_job_t*)prte_pointer_array_get_item(&g->jobs, i);
+        if (NULL == job) {
+            continue;
+        }
+        PRTE_RELEASE(job);
+    }
+}
+
+PRTE_CLASS_INSTANCE(prte_job_grp_t,
+                    prte_object_t,
+                    prte_job_grp_construct,
+                    prte_job_grp_destruct);
+
 static void prte_job_construct(prte_job_t *job)
 {
     job->exit_code = 0;
     job->personality = NULL;
+    job->grp = NULL;
     PMIX_LOAD_NSPACE(job->nspace, NULL);
     job->index = -1;
     job->offset = 0;
