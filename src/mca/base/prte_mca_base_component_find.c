@@ -122,7 +122,7 @@ int prte_mca_base_component_find(const char *directory, prte_mca_base_framework_
                               static_components[i]->mca_component_name)) {
                 cli = PMIX_NEW(prte_mca_base_component_list_item_t);
                 if (NULL == cli) {
-                    ret = PRTE_ERR_OUT_OF_RESOURCE;
+                    ret = PMIX_ERR_OUT_OF_RESOURCE;
                     goto component_find_out;
                 }
                 cli->cli_component = static_components[i];
@@ -354,7 +354,7 @@ static int component_find_check(prte_mca_base_framework_t *framework,
             prte_show_help("help-prte-mca-base.txt", "find-available:not-valid", true,
                            prte_process_info.nodename, framework->framework_name,
                            requested_component_names[i]);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
     }
 

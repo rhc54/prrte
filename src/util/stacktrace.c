@@ -601,7 +601,7 @@ char *prte_stackframe_output_string(void)
  * by the user.
  *
  *  @returnvalue PRTE_SUCCESS
- *  @returnvalue PRTE_ERR_BAD_PARAM if the value in the signal-list
+ *  @returnvalue PMIX_ERR_BAD_PARAM if the value in the signal-list
  *    is not a valid signal-number
  *
  */
@@ -638,7 +638,7 @@ int prte_util_register_stackhandlers(void)
         if (NULL == next) {
             free(prte_stacktrace_output_filename);
             free(filename_cpy);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
         next++; // move past the ':' to the filename specified
 
@@ -684,18 +684,18 @@ int prte_util_register_stackhandlers(void)
                            tmp);
             return PRTE_ERR_SILENT;
         } else if (next == NULL) {
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         } else if (':' == *next && 0 == strncasecmp(next, ":complain", 9)) {
             complain = true;
             next += 9;
         } else if (',' != *next && '\0' != *next) {
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
 
         /* Just query first */
         ret = sigaction(sig, NULL, &old);
         if (0 != ret) {
-            return PRTE_ERR_IN_ERRNO;
+            return PMIX_ERR_IN_ERRNO;
         }
         /* Was there something already there? */
         if (SIG_IGN != old.sa_handler && SIG_DFL != old.sa_handler) {
@@ -712,7 +712,7 @@ int prte_util_register_stackhandlers(void)
         /* Nope, nothing was there, so put in ours */
         else {
             if (0 != sigaction(sig, &act, NULL)) {
-                return PRTE_ERR_IN_ERRNO;
+                return PMIX_ERR_IN_ERRNO;
             }
         }
     }

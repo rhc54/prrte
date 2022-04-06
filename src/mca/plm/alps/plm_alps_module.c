@@ -213,8 +213,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -545,13 +545,13 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
     char *exec_argv = pmix_path_findv(argv[0], 0, env, NULL);
 
     if (NULL == exec_argv) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     alps_pid = fork();
     if (-1 == alps_pid) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
-        return PRTE_ERR_SYS_LIMITS_CHILDREN;
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
+        return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
 
     alpsrun = PMIX_NEW(prte_proc_t);

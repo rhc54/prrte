@@ -191,7 +191,7 @@ int prte_mca_base_component_parse_requested(const char *requested, bool *include
  * @param[in] filter_flags Metadata flags components are required to have set (CR ready)
  *
  * @returns PRTE_SUCCESS On success
- * @returns PRTE_ERR_NOT_FOUND If some component in {filter_names} is not found in
+ * @returns PMIX_ERR_NOT_FOUND If some component in {filter_names} is not found in
  * {components}. Does not apply to negated filters.
  * @returns prte error code On other error.
  *

@@ -309,9 +309,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* create and pass a job-level session directory */
     if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         PMIX_INFO_LIST_RELEASE(info);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     rc = pmix_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
     if (PMIX_SUCCESS != rc) {
@@ -492,10 +492,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 /* create and pass a proc-level session directory */
                 if (0 > pmix_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
                                       PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
-                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
                     PMIX_INFO_LIST_RELEASE(info);
                     PMIX_INFO_LIST_RELEASE(pmap);
-                    return PRTE_ERR_OUT_OF_RESOURCE;
+                    return PMIX_ERR_OUT_OF_RESOURCE;
                 }
                 if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
                     PMIX_ERROR_LOG(rc);
@@ -730,8 +730,8 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
     /* create and pass a job-level session directory */
     if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     rc = pmix_os_dirpath_create(tmp, S_IRWXU);
     if (PMIX_SUCCESS != rc) {

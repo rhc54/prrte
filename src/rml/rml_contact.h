@@ -44,7 +44,7 @@ BEGIN_C_DECLS
  *                          information is not needed
  *
  * @retval PRTE_SUCCESS     Information successfully extraced
- * @retval PRTE_ERR_BAD_PARAM The contact_info was not a valid string
+ * @retval PMIX_ERR_BAD_PARAM The contact_info was not a valid string
  * @retval PRTE_ERROR       An unspecified error occurred
  */
 PRTE_EXPORT int prte_rml_parse_uris(const char *contact_inf, pmix_proc_t *peer, char ***uris);

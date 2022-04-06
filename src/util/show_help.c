@@ -219,7 +219,7 @@ static int array2string(char **outstring, int want_error_header, char **lines)
 
     (*outstring) = (char *) malloc(len + 1);
     if (NULL == *outstring) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* Fill the big string */
@@ -343,7 +343,7 @@ static int open_file(const char *base, const char *topic)
         }
         free(tmp);
         free(err_msg);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (NULL != err_msg) {
@@ -376,7 +376,7 @@ static int find_topic(const char *base, const char *topic)
         case PRTE_SHOW_HELP_PARSE_TOPIC:
             tmp = strdup(prte_show_help_yytext);
             if (NULL == tmp) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             tmp[strlen(tmp) - 1] = '\0';
             ret = strcmp(tmp + 1, topic);
@@ -401,7 +401,7 @@ static int find_topic(const char *base, const char *topic)
                 }
             }
             free(tmp);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
 
         default:
             break;
@@ -576,12 +576,12 @@ static int match(const char *a, const char *b)
     if (NULL != strchr(a, '*') || NULL != strchr(b, '*')) {
         tmp1 = strdup(a);
         if (NULL == tmp1) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         tmp2 = strdup(b);
         if (NULL == tmp2) {
             free(tmp1);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         p1 = strchr(tmp1, '*');
         p2 = strchr(tmp2, '*');
@@ -610,7 +610,7 @@ static int match(const char *a, const char *b)
 
 /*
  * Check to see if a given (filename, topic) tuple has been displayed
- * already.  Return PRTE_SUCCESS if so, or PRTE_ERR_NOT_FOUND if not.
+ * already.  Return PRTE_SUCCESS if so, or PMIX_ERR_NOT_FOUND if not.
  *
  * Always return a tuple_list_item_t representing this (filename,
  * topic) entry in the list of "already been displayed tuples" (if it
@@ -636,12 +636,12 @@ static int get_tli(const char *filename, const char *topic, tuple_list_item_t **
     /* Nope, we didn't find it -- make a new one */
     *tli = PMIX_NEW(tuple_list_item_t);
     if (NULL == *tli) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     (*tli)->tli_filename = strdup(filename);
     (*tli)->tli_topic = strdup(topic);
     pmix_list_append(&abd_tuples, &((*tli)->super));
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 static void show_accumulated_duplicates(int fd, short event, void *context)
@@ -692,7 +692,7 @@ static int show_help(const char *filename, const char *topic, const char *output
     if (prte_help_want_aggregate) {
         rc = get_tli(filename, topic, &tli);
     } else {
-        rc = PRTE_ERR_NOT_FOUND;
+        rc = PMIX_ERR_NOT_FOUND;
     }
 
     /* If there's no output string (i.e., this is a control message
@@ -740,7 +740,7 @@ static int show_help(const char *filename, const char *topic, const char *output
         }
     }
     /* Not already displayed */
-    else if (PRTE_ERR_NOT_FOUND == rc) {
+    else if (PMIX_ERR_NOT_FOUND == rc) {
         local_delivery(output);
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
@@ -757,7 +757,7 @@ after_output:
     if (prte_help_want_aggregate) {
         pnli = PMIX_NEW(prte_namelist_t);
         if (NULL == pnli) {
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            rc = PMIX_ERR_OUT_OF_RESOURCE;
             PRTE_ERROR_LOG(rc);
             return rc;
         }

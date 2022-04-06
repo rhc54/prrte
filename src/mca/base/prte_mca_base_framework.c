@@ -106,7 +106,7 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
         ret = pmix_asprintf(&desc, "Verbosity level for the %s framework (default: 0)",
                             framework->framework_name);
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         framework->framework_verbose = PRTE_MCA_BASE_VERBOSE_ERROR;
@@ -150,12 +150,12 @@ int prte_mca_base_framework_register_list(prte_mca_base_framework_t **frameworks
                                           prte_mca_base_register_flag_t flags)
 {
     if (NULL == frameworks) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_register(frameworks[i], flags);
-        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PMIX_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -216,12 +216,12 @@ int prte_mca_base_framework_open_list(prte_mca_base_framework_t **frameworks,
                                       prte_mca_base_open_flag_t flags)
 {
     if (NULL == frameworks) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_open(frameworks[i], flags);
-        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PMIX_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -292,7 +292,7 @@ int prte_mca_base_framework_close(struct prte_mca_base_framework_t *framework)
 int prte_mca_base_framework_close_list(prte_mca_base_framework_t **frameworks)
 {
     if (NULL == frameworks) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     for (int i = 0; frameworks[i]; ++i) {

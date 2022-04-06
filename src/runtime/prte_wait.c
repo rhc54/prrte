@@ -141,7 +141,7 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
 
     if (NULL == child || NULL == callback) {
         /* bozo protection */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         return;
     }
 
@@ -207,7 +207,7 @@ void prte_wait_cb_cancel(prte_proc_t *child)
 
     if (NULL == child) {
         /* bozo protection */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         return;
     }
 

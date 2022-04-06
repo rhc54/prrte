@@ -70,7 +70,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
     if (NULL == req) {
         /* we are hosed */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         return;
     }
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room, NULL);
@@ -225,9 +225,9 @@ static void interim(int sd, short args, void *cbdata)
         if (NULL != papp->cmd) {
             app->app = strdup(papp->cmd);
         } else if (NULL == papp->argv || NULL == papp->argv[0]) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             PMIX_RELEASE(jdata);
-            rc = PRTE_ERR_BAD_PARAM;
+            rc = PMIX_ERR_BAD_PARAM;
             goto complete;
         } else {
             app->app = strdup(papp->argv[0]);
@@ -352,7 +352,7 @@ static void interim(int sd, short args, void *cbdata)
                 prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
                                info->value.data.string,
                                prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
-                rc = PRTE_ERR_BAD_PARAM;
+                rc = PMIX_ERR_BAD_PARAM;
                 goto complete;
             }
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_PPR);
@@ -490,12 +490,12 @@ static void interim(int sd, short args, void *cbdata)
                 }
             } else {
                 /* we cannot support the request at this time */
-                rc = PRTE_ERR_NOT_SUPPORTED;
+                rc = PMIX_ERR_NOT_SUPPORTED;
                 goto complete;
             }
 #else
             /* we cannot support the request */
-            rc = PRTE_ERR_NOT_SUPPORTED;
+            rc = PMIX_ERR_NOT_SUPPORTED;
             goto complete;
 #endif
 
@@ -512,7 +512,7 @@ static void interim(int sd, short args, void *cbdata)
                 }
             } else {
                 /* we cannot support the request at this time */
-                rc = PRTE_ERR_NOT_SUPPORTED;
+                rc = PMIX_ERR_NOT_SUPPORTED;
                 goto complete;
             }
             /* also must add to job-level cache */
@@ -531,7 +531,7 @@ static void interim(int sd, short args, void *cbdata)
                 }
             } else {
                 /* we cannot support the request at this time */
-                rc = PRTE_ERR_NOT_SUPPORTED;
+                rc = PMIX_ERR_NOT_SUPPORTED;
                 goto complete;
             }
             /* also must add to job-level cache */
@@ -827,7 +827,7 @@ static void _cnlk(pmix_status_t status, pmix_pdata_t data[], size_t ndata, void 
 
     /* if we have more than one data returned, that's an error */
     if (1 != ndata) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         ret = PMIX_ERR_BAD_PARAM;
         goto release;
     }
@@ -1015,7 +1015,7 @@ static void _cnct(int sd, short args, void *cbdata)
              * server is just our HNP, then we have no way of finding
              * out about it, and all we can do is return an error */
             if (PMIX_CHECK_PROCID(&prte_pmix_server_globals.server, PRTE_PROC_MY_HNP)) {
-                rc = PRTE_ERR_NOT_SUPPORTED;
+                rc = PMIX_ERR_NOT_SUPPORTED;
                 goto release;
             }
             /* ask the global data server for the data - if we get it,
@@ -1217,5 +1217,5 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client, pmix_alloc_directi
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     /* PRTE currently has no way of supporting allocation requests */
-    return PRTE_ERR_NOT_SUPPORTED;
+    return PMIX_ERR_NOT_SUPPORTED;
 }

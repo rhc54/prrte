@@ -456,7 +456,7 @@ static int component_available(void)
         }
         copied_interface = PMIX_NEW(pmix_pif_t);
         if (NULL == copied_interface) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         pmix_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
         copied_interface->if_index = i;
@@ -485,7 +485,7 @@ static int component_available(void)
         && 0 == pmix_argv_count(prte_oob_tcp_component.ipv6conns)
 #endif
     ) {
-        return PRTE_ERR_NOT_AVAILABLE;
+        return PMIX_ERR_NOT_AVAILABLE;
     }
 
     return PRTE_SUCCESS;
@@ -623,7 +623,7 @@ static int parse_uri(const uint16_t af_family, const char *host, const char *por
         in->sin_family = AF_INET;
         in->sin_addr.s_addr = inet_addr(host);
         if (in->sin_addr.s_addr == INADDR_NONE) {
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
         ((struct sockaddr_in *) inaddr)->sin_port = htons(atoi(port));
     }
@@ -635,14 +635,14 @@ static int parse_uri(const uint16_t af_family, const char *host, const char *por
 
         if (0 == inet_pton(AF_INET6, host, (void *) &in6->sin6_addr)) {
             prte_output(0, "oob_tcp_parse_uri: Could not convert %s\n", host);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
         in6->sin6_family = AF_INET6;
         in6->sin6_port = htons(atoi(port));
     }
 #endif
     else {
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
     }
     return PRTE_SUCCESS;
 }
@@ -701,7 +701,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
         /* separate the mask from the network addrs */
         masks_string = strrchr(tcpuri, ':');
         if (NULL == masks_string) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             free(tcpuri);
             continue;
         }
@@ -712,7 +712,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
         /* separate the ports from the network addrs */
         ports = strrchr(tcpuri, ':');
         if (NULL == ports) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             free(tcpuri);
             continue;
         }

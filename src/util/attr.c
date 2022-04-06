@@ -51,7 +51,7 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
-                PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
+                PRTE_ERROR_LOG(PMIX_ERR_TYPE_MISMATCH);
                 return false;
             }
             if (NULL != data) {
@@ -76,7 +76,7 @@ int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool l
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
-                return PRTE_ERR_TYPE_MISMATCH;
+                return PMIX_ERR_TYPE_MISMATCH;
             }
             if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
                 PRTE_ERROR_LOG(rc);
@@ -200,7 +200,7 @@ int prte_attr_register(const char *project, prte_attribute_key_t key_base,
         }
     }
 
-    return PRTE_ERR_OUT_OF_RESOURCE;
+    return PMIX_ERR_OUT_OF_RESOURCE;
 }
 
 char *prte_attr_print_list(pmix_list_t *attributes)
@@ -654,7 +654,7 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
         if (NULL == kv->data.data.proc) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char *) data);
         break;
@@ -662,7 +662,7 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
     case PMIX_PROC:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
         if (NULL == kv->data.data.proc) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         PMIX_XFER_PROCID(kv->data.data.proc, (pmix_proc_t *) data);
         break;
@@ -682,8 +682,8 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
         break;
 
     default:
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
-        return PRTE_ERR_NOT_SUPPORTED;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_SUPPORTED);
+        return PMIX_ERR_NOT_SUPPORTED;
     }
     return PRTE_SUCCESS;
 }
@@ -704,11 +704,11 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     bool found = false;
 
     if (type != kv->data.type) {
-        return PRTE_ERR_TYPE_MISMATCH;
+        return PMIX_ERR_TYPE_MISMATCH;
     }
     if (NULL == data) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     /* if they didn't give us a storage address
      * and the data type isn't one where we can
@@ -720,8 +720,8 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         }
     }
     if (!found && NULL == *data) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     switch (type) {
@@ -780,7 +780,7 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     case PMIX_BYTE_OBJECT:
         boptr = (pmix_byte_object_t *) malloc(sizeof(pmix_byte_object_t));
         if (NULL == boptr) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
             boptr->bytes = (char *) malloc(kv->data.data.bo.size);
@@ -812,7 +812,7 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(*data, 1);
         if (NULL == *data) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
         break;
@@ -820,7 +820,7 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     case PMIX_PROC:
         PMIX_PROC_CREATE(*data, 1);
         if (NULL == *data) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         memcpy(*data, kv->data.data.proc, sizeof(pmix_proc_t));
         break;
@@ -828,7 +828,7 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
     case PMIX_ENVAR:
         PMIX_ENVAR_CREATE(envar, 1);
         if (NULL == envar) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         if (NULL != kv->data.data.envar.envar) {
             envar->envar = strdup(kv->data.data.envar.envar);
@@ -841,8 +841,8 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         break;
 
     default:
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
-        return PRTE_ERR_NOT_SUPPORTED;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_SUPPORTED);
+        return PMIX_ERR_NOT_SUPPORTED;
     }
     return PRTE_SUCCESS;
 }

@@ -150,7 +150,7 @@ void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *b
         break;
 
     default:
-        PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
+        PRTE_ERROR_LOG(PMIX_ERR_VALUE_OUT_OF_BOUNDS);
     }
 }
 
@@ -180,14 +180,14 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
      */
     /* get the job data object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(name.nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
     /* get the proc object for it */
     proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, name.rank);
     if (NULL == proc || NULL == proc->node) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }

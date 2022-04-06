@@ -116,7 +116,7 @@ PRTE_EXPORT int prte_mca_base_var_group_deregister(int group_index);
  * @param[in] component_name Component name
  *
  * @returns PRTE_SUCCESS if found
- * @returns PRTE_ERR_NOT_FOUND if not found
+ * @returns PMIX_ERR_NOT_FOUND if not found
  */
 PRTE_EXPORT int prte_mca_base_var_group_find(const char *project_name, const char *framework_name,
                                              const char *component_name);
@@ -128,7 +128,7 @@ PRTE_EXPORT int prte_mca_base_var_group_find(const char *project_name, const cha
  * @param[out] index     Index of group if found
  *
  * @returns PRTE_SUCCESS if found
- * @returns PRTE_ERR_NOT_FOUND if not found
+ * @returns PMIX_ERR_NOT_FOUND if not found
  */
 PRTE_EXPORT int prte_mca_base_var_group_find_by_name(const char *full_name, int *index);
 
@@ -138,7 +138,7 @@ PRTE_EXPORT int prte_mca_base_var_group_find_by_name(const char *full_name, int 
  * @param[in] group_index Group index
  * @param[out] group Storage for the group object pointer.
  *
- * @retval PRTE_ERR_NOT_FOUND If the group specified by group_index does not exist.
+ * @retval PMIX_ERR_NOT_FOUND If the group specified by group_index does not exist.
  * @retval PRTE_SUCCESS If the group is found
  *
  * The returned pointer belongs to the MCA variable system. Do not modify/release/retain

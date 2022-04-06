@@ -216,8 +216,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -238,13 +238,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* Allocate a bunch of TM events to use for tm_spawn()ing */
     tm_events = malloc(sizeof(tm_event_t) * map->num_new_daemons);
     if (NULL == tm_events) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        rc = PMIX_ERR_OUT_OF_RESOURCE;
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
     tm_task_ids = malloc(sizeof(tm_task_id) * map->num_new_daemons);
     if (NULL == tm_task_ids) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        rc = PMIX_ERR_OUT_OF_RESOURCE;
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
@@ -521,5 +521,5 @@ static int plm_tm_connect(void)
 #endif
     }
 
-    return PRTE_ERR_RESOURCE_BUSY;
+    return PMIX_ERR_RESOURCE_BUSY;
 }

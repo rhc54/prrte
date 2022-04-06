@@ -175,8 +175,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* get the job data pointer */
     if (NULL == (jdata = prte_get_job_data_object(job))) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* get a pointer to the job map */
@@ -513,8 +513,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                     if (NULL
                         == (dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
                                                                               dmnvpid))) {
-                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                        rc = PRTE_ERR_NOT_FOUND;
+                        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                        rc = PMIX_ERR_NOT_FOUND;
                         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
                         PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                         goto REPORT_ERROR;
@@ -545,8 +545,8 @@ next:
         goto REPORT_ERROR;
     }
     if (PMIX_NSPACE_INVALID(jdata->nspace)) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        rc = PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        rc = PMIX_ERR_BAD_PARAM;
         goto REPORT_ERROR;
     }
     PMIX_LOAD_NSPACE(*job, jdata->nspace);
@@ -569,8 +569,8 @@ next:
         PMIX_RELEASE(jdata);
         /* get the correct job object - it will be completely filled out */
         if (NULL == (jdata = prte_get_job_data_object(*job))) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             goto REPORT_ERROR;
         }
     } else {
@@ -720,16 +720,16 @@ next:
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pptr->name),
                                 PRTE_VPID_PRINT(pptr->parent));
             if (PMIX_RANK_INVALID == pptr->parent) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                rc = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                rc = PMIX_ERR_BAD_PARAM;
                 goto REPORT_ERROR;
             }
             /* connect the proc to its node object */
             if (NULL
                 == (dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
                                                                       pptr->parent))) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                rc = PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                rc = PMIX_ERR_NOT_FOUND;
                 goto REPORT_ERROR;
             }
             PMIX_RETAIN(dmn->node);
@@ -876,7 +876,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
          * ensuring they start out matching.
          */
         if (NULL == getcwd(dir, sizeof(dir))) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
         pmix_setenv("PWD", dir, true, &app->env);
@@ -908,7 +908,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
          * ensuring they start out matching.
          */
         if (NULL == getcwd(dir, sizeof(dir))) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
         pmix_setenv("PWD", dir, true, &app->env);
@@ -991,8 +991,8 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             char *tmp = strdup(app->env[i]);
             ptr = strchr(tmp, '=');
             if (NULL == ptr) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                rc = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                rc = PMIX_ERR_BAD_PARAM;
                 state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
                 free(tmp);
                 goto errorout;
@@ -1351,7 +1351,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         rc = pmix_util_check_context_app(&app->app, app->cwd, app->env);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (PMIX_SUCCESS != rc) {
-            rc = PRTE_ERR_EXE_NOT_FOUND;
+            rc = PMIX_ERR_JOB_EXE_NOT_FOUND;
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
                 child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
@@ -1567,8 +1567,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
     /* only way to get here is if we couldn't find the specified proc.
      * report that as an error and return it
      */
-    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-    return PRTE_ERR_NOT_FOUND;
+    PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+    return PMIX_ERR_NOT_FOUND;
 }
 
 /*
@@ -1632,7 +1632,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
     /* get the jobdat for this child */
     if (NULL == (jobdat = prte_get_job_data_object(proc->name.nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto MOVEON;
     }
 
@@ -2060,14 +2060,14 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
      * to this place as our default directory
      */
     if (NULL == getcwd(basedir, sizeof(basedir))) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* find this child's jobdat */
     if (NULL == (jobdat = prte_get_job_data_object(child->name.nspace))) {
         /* not found */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* CHECK THE NUMBER OF TIMES THIS CHILD HAS BEEN RESTARTED

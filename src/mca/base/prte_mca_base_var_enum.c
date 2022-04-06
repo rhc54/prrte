@@ -67,7 +67,7 @@ static int mca_base_var_enum_bool_get_value(prte_mca_base_var_enum_t *self, int 
     PRTE_HIDE_UNUSED_PARAMS(self);
 
     if (1 < index) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     *value = index ? 1 : 0;
@@ -97,7 +97,7 @@ static int mca_base_var_enum_bool_vfs(prte_mca_base_var_enum_t *self, const char
                    || 0 == strcmp(string_value, "n")) {
             v = 0;
         } else {
-            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
         }
     }
 
@@ -122,7 +122,7 @@ static int mca_base_var_enum_bool_dump(prte_mca_base_var_enum_t *self, char **ou
 {
     PRTE_HIDE_UNUSED_PARAMS(self);
     *out = strdup("0: f|false|disabled|no|n, 1: t|true|enabled|yes|y");
-    return *out ? PRTE_SUCCESS : PRTE_ERR_OUT_OF_RESOURCE;
+    return *out ? PRTE_SUCCESS : PMIX_ERR_OUT_OF_RESOURCE;
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_bool
@@ -150,7 +150,7 @@ static int mca_base_var_enum_auto_bool_get_value(prte_mca_base_var_enum_t *self,
     PRTE_HIDE_UNUSED_PARAMS(self);
 
     if (2 < index) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     *value = values[index];
@@ -182,7 +182,7 @@ static int mca_base_var_enum_auto_bool_vfs(prte_mca_base_var_enum_t *self, const
         } else if (0 == strcasecmp(string_value, "auto")) {
             v = -1;
         } else {
-            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
         }
     }
 
@@ -219,7 +219,7 @@ static int mca_base_var_enum_auto_bool_dump(prte_mca_base_var_enum_t *self, char
 {
     PRTE_HIDE_UNUSED_PARAMS(self);
     *out = strdup("-1: auto, 0: f|false|disabled|no|n, 1: t|true|enabled|yes|y");
-    return *out ? PRTE_SUCCESS : PRTE_ERR_OUT_OF_RESOURCE;
+    return *out ? PRTE_SUCCESS : PMIX_ERR_OUT_OF_RESOURCE;
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_auto_bool
@@ -263,7 +263,7 @@ static int mca_base_var_enum_verbose_vfs(prte_mca_base_var_enum_t *self, const c
             }
         }
 
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     } else if (v < PRTE_MCA_BASE_VERBOSE_NONE) {
         v = PRTE_MCA_BASE_VERBOSE_NONE;
     } else if (v > PRTE_MCA_BASE_VERBOSE_MAX) {
@@ -282,7 +282,7 @@ static int mca_base_var_enum_verbose_sfv(prte_mca_base_var_enum_t *self, const i
     PRTE_HIDE_UNUSED_PARAMS(self);
 
     if (value < 0 || value > 100) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     for (int i = 0; verbose_values[i].string; ++i) {
@@ -297,7 +297,7 @@ static int mca_base_var_enum_verbose_sfv(prte_mca_base_var_enum_t *self, const i
     if (string_value) {
         ret = pmix_asprintf(string_value, "%d", value);
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -319,7 +319,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
     free(*out);
     if (0 > ret) {
         *out = NULL;
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     *out = tmp;
@@ -350,12 +350,12 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
 
     new_enum = PMIX_NEW(prte_mca_base_var_enum_t);
     if (NULL == new_enum) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     new_enum->enum_name = strdup(name);
     if (NULL == new_enum->enum_name) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     for (i = 0; values[i].string; ++i)
@@ -366,7 +366,7 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
     new_enum->enum_values = calloc(new_enum->enum_value_count + 1, sizeof(*new_enum->enum_values));
     if (NULL == new_enum->enum_values) {
         PMIX_RELEASE(new_enum);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     for (i = 0; i < new_enum->enum_value_count; ++i) {
@@ -390,12 +390,12 @@ int prte_mca_base_var_enum_create_flag(const char *name,
 
     new_enum = PMIX_NEW(prte_mca_base_var_enum_flag_t);
     if (NULL == new_enum) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     new_enum->super.enum_name = strdup(name);
     if (NULL == new_enum->super.enum_name) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     for (i = 0; flags[i].string; ++i)
@@ -407,7 +407,7 @@ int prte_mca_base_var_enum_create_flag(const char *name,
                                   sizeof(*new_enum->enum_flags));
     if (NULL == new_enum->enum_flags) {
         PMIX_RELEASE(new_enum);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     int all_flags = 0;
@@ -448,7 +448,7 @@ static int enum_dump(prte_mca_base_var_enum_t *self, char **out)
         if (tmp)
             free(tmp);
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         tmp = *out;
     }
@@ -473,7 +473,7 @@ static int enum_get_value(prte_mca_base_var_enum_t *self, int index, int *value,
     }
 
     if (index >= count) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     if (value) {
@@ -512,7 +512,7 @@ static int enum_value_from_string(prte_mca_base_var_enum_t *self, const char *st
     }
 
     if (i == count) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     *value_out = self->enum_values[i].value;
@@ -537,7 +537,7 @@ static int enum_string_from_value(prte_mca_base_var_enum_t *self, const int valu
     }
 
     if (i == count) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     if (string_value) {
@@ -587,7 +587,7 @@ static int enum_get_value_flag(prte_mca_base_var_enum_t *self, int index, int *v
     }
 
     if (index >= count) {
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     if (value) {
@@ -617,7 +617,7 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
 
     flags = pmix_argv_split(string_value, ',');
     if (NULL == flags) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     flag = 0;
@@ -651,7 +651,7 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
 
         if (!found || conflict || (is_int && value)) {
             pmix_argv_free(flags);
-            return !found ? PRTE_ERR_VALUE_OUT_OF_BOUNDS : PRTE_ERR_BAD_PARAM;
+            return !found ? PMIX_ERR_VALUE_OUT_OF_BOUNDS : PMIX_ERR_BAD_PARAM;
         }
     }
 
@@ -687,12 +687,12 @@ static int enum_string_from_value_flag(prte_mca_base_var_enum_t *self, const int
         free(tmp);
 
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         if (value & flag_enum->enum_flags[i].conflicting_flag) {
             free(out);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
 
         current &= ~flag_enum->enum_flags[i].flag;
@@ -700,7 +700,7 @@ static int enum_string_from_value_flag(prte_mca_base_var_enum_t *self, const int
 
     if (current) {
         free(out);
-        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     if (string_value) {
@@ -726,7 +726,7 @@ static int enum_dump_flag(prte_mca_base_var_enum_t *self, char **out)
 
     *out = strdup("Comma-delimited list of: ");
     if (NULL == *out) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     for (int i = 0; i < self->enum_value_count; ++i) {
@@ -736,7 +736,7 @@ static int enum_dump_flag(prte_mca_base_var_enum_t *self, char **out)
                             flag_enum->enum_flags[i].flag, flag_enum->enum_flags[i].string);
         free(tmp);
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 

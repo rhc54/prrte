@@ -300,7 +300,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--prtemca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
@@ -325,7 +325,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--mca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
@@ -438,7 +438,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             /* strip any quotes around the args */
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
@@ -464,7 +464,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--mca", argv[i]) || 0 == strcmp("--gmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             /* strip any quotes around the args */
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);

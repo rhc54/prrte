@@ -95,7 +95,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /* use our topology */
     t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     topo = t->topo;
 
@@ -116,8 +116,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         root = hwloc_get_root_obj(topo);
         if (NULL == root->userdata) {
             /* incorrect */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            return PMIX_ERR_BAD_PARAM;
         }
         rdata = (prte_hwloc_topo_data_t *) root->userdata;
         available = hwloc_bitmap_dup(rdata->available);

@@ -116,7 +116,7 @@ typedef struct prte_mca_base_module_2_0_0_t prte_mca_base_module_2_0_0_t;
  *
  * @retval PRTE_SUCCESS This component can be used in the process.
  *
- * @retval PRTE_ERR_NOT_AVAILABLE Silently ignore this component for
+ * @retval PMIX_ERR_NOT_AVAILABLE Silently ignore this component for
  * the duration of the process (it may even be unloaded from the
  * process).
  *
@@ -200,7 +200,7 @@ typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0
  *
  * @retval PRTE_SUCCESS This component successfully registered its
  * parameters and can be used in this process.
- * @retval PRTE_ERR_BAD_PARAM Indicates that the register function
+ * @retval PMIX_ERR_BAD_PARAM Indicates that the register function
  * failed because an MCA parameter got an invalid/incorrect value.
  *
  * @retval anything_else The MCA will ignore this component for the
@@ -227,7 +227,7 @@ typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0
  * are immediately unloaded, ompi_info will not display them), the
  * mechanism is available should the need arise.
  *
- * Note that if the function returns PRTE_ERR_BAD_PARAM, it is
+ * Note that if the function returns PMIX_ERR_BAD_PARAM, it is
  * possible (likely?) that the component didn't register all of its
  * parameters.  When this happens, ompi_info (and friends) will stop
  * execution and print out all existing registered parameters from the

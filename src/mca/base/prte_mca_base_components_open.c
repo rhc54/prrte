@@ -113,8 +113,8 @@ static int open_components(prte_mca_base_framework_t *framework)
                                     "component %s open function successful",
                                     component->mca_component_name);
             } else {
-                if (PRTE_ERR_NOT_AVAILABLE != ret) {
-                    /* If the component returns PRTE_ERR_NOT_AVAILABLE,
+                if (PMIX_ERR_NOT_AVAILABLE != ret) {
+                    /* If the component returns PMIX_ERR_NOT_AVAILABLE,
                        it's a cue to "silently ignore me" -- it's not a
                        failure, it's just a way for the component to say
                        "nope!".

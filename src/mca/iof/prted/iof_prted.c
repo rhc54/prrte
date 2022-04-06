@@ -148,8 +148,8 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
 SETUP:
     /* get the local jobdata for this proc */
     if (NULL == (jobdat = prte_get_job_data_object(proct->name.nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     /* define a read event and activate it */
     if (src_tag & PRTE_IOF_STDOUT) {
@@ -196,7 +196,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
 
     /* this is a local call - only stdin is suppprted */
     if (PRTE_IOF_STDIN != src_tag) {
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,

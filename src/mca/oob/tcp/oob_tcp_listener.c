@@ -106,8 +106,8 @@ int prte_oob_tcp_start_listening(void)
         && NULL == prte_oob_tcp_component.ipv6conns
 #endif
     ) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* create listen socket(s) for incoming connection attempts */
@@ -121,7 +121,7 @@ int prte_oob_tcp_start_listening(void)
     if (PRTE_SUCCESS != rc && PRTE_SUCCESS != rc2) {
         /* we were unable to open any listening sockets */
         prte_show_help("help-oob-tcp.txt", "no-listeners", true);
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
 
     /* if I am the HNP, start a listening thread so we can
@@ -129,8 +129,8 @@ int prte_oob_tcp_start_listening(void)
      */
     if (PRTE_PROC_IS_MASTER) {
         if (0 > pipe(prte_oob_tcp_component.stop_thread)) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         /* Make sure the pipe FDs are set to close-on-exec so that
@@ -139,8 +139,8 @@ int prte_oob_tcp_start_listening(void)
             || pmix_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
             close(prte_oob_tcp_component.stop_thread[0]);
             close(prte_oob_tcp_component.stop_thread[1]);
-            PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
-            return PRTE_ERR_IN_ERRNO;
+            PRTE_ERROR_LOG(PMIX_ERR_IN_ERRNO);
+            return PMIX_ERR_IN_ERRNO;
         }
 
         prte_oob_tcp_component.listen_thread_active = true;
@@ -244,7 +244,7 @@ static int create_listen(void)
                             strerror(prte_socket_errno), prte_socket_errno);
             }
             pmix_argv_free(ports);
-            return PRTE_ERR_IN_ERRNO;
+            return PMIX_ERR_IN_ERRNO;
         }
 
         /* Enable/disable reusing ports */
@@ -454,7 +454,7 @@ static int create_listen6(void)
                 prte_output(0, "prte_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
-            return PRTE_ERR_IN_ERRNO;
+            return PMIX_ERR_IN_ERRNO;
         }
         /* Set the socket to close-on-exec so that no children inherit
            this FD */

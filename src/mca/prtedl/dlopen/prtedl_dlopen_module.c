@@ -78,7 +78,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
 
             pmix_asprintf(&name, "%s%s", fname, ext);
             if (NULL == name) {
-                return PRTE_ERR_IN_ERRNO;
+                return PMIX_ERR_IN_ERRNO;
             }
 
             /* Does the file exist? */
@@ -88,7 +88,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
                     rc = asprintf(err_msg, "File %s not found", name);
                     if (0 > rc) {
                         free(name);
-                        return PRTE_ERR_OUT_OF_RESOURCE;
+                        return PMIX_ERR_OUT_OF_RESOURCE;
                     }
                 }
                 free(name);
@@ -174,7 +174,7 @@ static int dlopen_foreachfile(const char *search_path,
 
         dp = opendir(dirs[i]);
         if (NULL == dp) {
-            ret = PRTE_ERR_IN_ERRNO;
+            ret = PMIX_ERR_IN_ERRNO;
             goto error;
         }
 
@@ -185,7 +185,7 @@ static int dlopen_foreachfile(const char *search_path,
             char *abs_name = NULL;
             pmix_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
             if (NULL == abs_name) {
-                ret = PRTE_ERR_IN_ERRNO;
+                ret = PMIX_ERR_IN_ERRNO;
                 goto error;
             }
 
@@ -193,7 +193,7 @@ static int dlopen_foreachfile(const char *search_path,
             struct stat buf;
             if (stat(abs_name, &buf) < 0) {
                 free(abs_name);
-                ret = PRTE_ERR_IN_ERRNO;
+                ret = PMIX_ERR_IN_ERRNO;
                 goto error;
             }
 

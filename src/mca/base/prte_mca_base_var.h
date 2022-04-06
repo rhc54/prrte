@@ -360,7 +360,7 @@ PRTE_EXPORT void prte_mca_base_var_finalize(void);
  * @param[in,out] storage Pointer to the value's location.
  *
  * @retval index Index value representing this variable.
- * @retval PRTE_ERR_OUT_OF_RESOURCE Upon failure to allocate memory.
+ * @retval PMIX_ERR_OUT_OF_RESOURCE Upon failure to allocate memory.
  * @retval PRTE_ERROR Upon failure to register the variable.
  *
  * This function registers an MCA variable and associates it
@@ -477,7 +477,7 @@ PRTE_EXPORT int prte_mca_base_framework_var_register(
  * @returns index Variable index for new synonym on success.
  * @returns PRTE_ERR_BAD_VAR If synonym_for does not reference a valid
  * variable.
- * @returns PRTE_ERR_OUT_OF_RESOURCE If memory could not be allocated.
+ * @returns PMIX_ERR_OUT_OF_RESOURCE If memory could not be allocated.
  * @returns PRTE_ERROR For all other errors.
  *
  * Upon success, this function creates a synonym MCA variable
@@ -550,8 +550,8 @@ PRTE_EXPORT int prte_mca_base_var_get_value(int vari, const void *value,
  * @param[in] source_file Source file if source is MCA_BASE_VAR_SOURCE_FILE.
  *
  * @retval PRTE_SUCCESS  Upon success.
- * @retval PRTE_ERR_PERM If the variable is not settable.
- * @retval PRTE_ERR_BAD_PARAM If the variable does not exist or has
+ * @retval PMIX_ERR_NO_PERMISSIONS If the variable is not settable.
+ * @retval PMIX_ERR_BAD_PARAM If the variable does not exist or has
  * been deregistered.
  * @retval PRTE_ERROR On other error.
  *
@@ -650,7 +650,7 @@ PRTE_EXPORT int prte_mca_base_var_check_exclusive(const char *project, const cha
  * @param[in] set Boolean indicating whether to set flag(s).
  *
  * @returns PRTE_SUCCESS If the flags are set successfully.
- * @returns PRTE_ERR_BAD_PARAM If the variable is not registered.
+ * @returns PMIX_ERR_BAD_PARAM If the variable is not registered.
  * @returns PRTE_ERROR Otherwise
  */
 PRTE_EXPORT int prte_mca_base_var_set_flag(int vari, prte_mca_base_var_flag_t flag, bool set);

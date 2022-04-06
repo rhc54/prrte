@@ -161,7 +161,7 @@ int prte_mca_base_var_generate_full_name4(const char *project, const char *frame
 
     name = calloc(1, len);
     if (NULL == name) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     for (i = 0, tmp = name; i < 4; ++i) {
@@ -358,7 +358,7 @@ int prte_mca_base_var_get_value(int vari, const void *value, prte_mca_base_var_s
     }
 
     if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (NULL != value) {
@@ -410,7 +410,7 @@ static int var_set_string(prte_mca_base_var_t *var, char *value)
     }
 
     if (NULL == value) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     while (NULL != (tmp = strstr(value, ":~/"))) {
@@ -422,7 +422,7 @@ static int var_set_string(prte_mca_base_var_t *var, char *value)
         free(value);
 
         if (0 > ret) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         value = tmp;
@@ -520,7 +520,7 @@ static int var_set_from_string(prte_mca_base_var_t *var, char *src)
                                src);
             }
 
-            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
         }
 
         if (PRTE_MCA_BASE_VAR_TYPE_INT == var->mbv_type
@@ -583,11 +583,11 @@ int prte_mca_base_var_set_value(int vari, const void *value, size_t size,
     }
 
     if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     if (!PRTE_VAR_IS_SETTABLE(var[0])) {
-        return PRTE_ERR_PERM;
+        return PMIX_ERR_NO_PERMISSIONS;
     }
 
     if (NULL != var->mbv_enumerator) {
@@ -629,7 +629,7 @@ int prte_mca_base_var_deregister(int vari)
     }
 
     if (!PRTE_VAR_IS_VALID(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* Mark this parameter as invalid but keep its info in case this
@@ -672,12 +672,12 @@ static int var_get(int vari, prte_mca_base_var_t **var_out, bool original)
     }
 
     if (vari < 0) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     var = pmix_pointer_array_get_item(&prte_mca_base_vars, vari);
     if (NULL == var) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     if (PRTE_VAR_IS_SYNONYM(var[0]) && original) {
@@ -699,7 +699,7 @@ int prte_mca_base_var_env_name(const char *param_name, char **env_name)
 
     ret = pmix_asprintf(env_name, "%s%s", prte_mca_prefix, param_name);
     if (0 > ret) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     return PRTE_SUCCESS;
@@ -727,7 +727,7 @@ static int var_find_by_name(const char *full_name, int *vari, bool invalidok)
         return PRTE_SUCCESS;
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 static int var_find(const char *project_name, const char *framework_name,
@@ -780,7 +780,7 @@ int prte_mca_base_var_set_flag(int vari, prte_mca_base_var_flag_t flag, bool set
 
     ret = var_get(vari, &var, true);
     if (PRTE_SUCCESS != ret || PRTE_VAR_IS_SYNONYM(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     var->mbv_flags = (var->mbv_flags & ~flag) | (set ? flag : PRTE_MCA_BASE_VAR_FLAG_NONE);
@@ -802,7 +802,7 @@ int prte_mca_base_var_get(int vari, const prte_mca_base_var_t **var)
     }
 
     if (!PRTE_VAR_IS_VALID(*(var[0]))) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     return PRTE_SUCCESS;
@@ -898,7 +898,7 @@ cleanup:
         *num_env = 0;
         *env = NULL;
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 /*
@@ -966,16 +966,16 @@ static int register_variable(const char *project_name, const char *framework_nam
 
     /* Developer error: check max length of strings */
     if (NULL != project_name && strlen(project_name) > PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (NULL != framework_name && strlen(framework_name) > PRTE_MCA_BASE_MAX_TYPE_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (NULL != component_name && strlen(component_name) > PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (NULL != variable_name && strlen(variable_name) > PRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
 #if PRTE_ENABLE_DEBUG
@@ -1034,7 +1034,7 @@ static int register_variable(const char *project_name, const char *framework_nam
             /* Attempting to create a synonym for a non-existent variable. probably a
              * developer error. */
             assert(NULL != original);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
     }
 
@@ -1164,7 +1164,7 @@ static int register_variable(const char *project_name, const char *framework_nam
             prte_show_help("help-prte-mca-var.txt", "re-register-with-different-type", true,
                            var->mbv_full_name);
 #endif
-            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PMIX_ERR_VALUE_OUT_OF_BOUNDS;
         }
     }
 
@@ -1285,7 +1285,7 @@ int prte_mca_base_var_register_synonym(int synonym_for, const char *project_name
 
     ret = var_get(synonym_for, &var, false);
     if (PRTE_SUCCESS != ret || PRTE_VAR_IS_SYNONYM(var[0])) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     if (flags & PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED) {
@@ -1310,7 +1310,7 @@ static int var_get_env(prte_mca_base_var_t *var, const char *name, char **source
     PRTE_HIDE_UNUSED_PARAMS(var);
 
     if (NULL == envvar) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     ret = snprintf(envvar, max_len, "%s%s", prte_mca_prefix, name);
@@ -1320,7 +1320,7 @@ static int var_get_env(prte_mca_base_var_t *var, const char *name, char **source
     *value = getenv(envvar);
     if (NULL == *value) {
         *source = NULL;
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     ret = snprintf(envvar, max_len, "%s%s%s", prte_mca_prefix, source_prefix, name);
@@ -1358,7 +1358,7 @@ static int var_set_from_env(prte_mca_base_var_t *var, prte_mca_base_var_t *origi
     if (PRTE_VAR_IS_DEFAULT_ONLY(original[0])) {
         prte_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
 
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE == original->mbv_source) {
@@ -1366,7 +1366,7 @@ static int var_set_from_env(prte_mca_base_var_t *var, prte_mca_base_var_t *origi
             prte_show_help("help-prte-mca-var.txt", "overridden-param-set", true, var_full_name);
         }
 
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_ENV;
@@ -1440,14 +1440,14 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
         if (PRTE_VAR_IS_DEFAULT_ONLY(var[0])) {
             prte_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
 
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
 
         if (PRTE_MCA_BASE_VAR_FLAG_ENVIRONMENT_ONLY & original->mbv_flags) {
             prte_show_help("help-prte-mca-var.txt", "environment-only-param", true, var_full_name,
                            fv->mbvfv_value, fv->mbvfv_file);
 
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
 
         if (PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE == original->mbv_source) {
@@ -1456,7 +1456,7 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
                                var_full_name);
             }
 
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
 
         if (deprecated) {
@@ -1480,7 +1480,7 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
         return var_set_from_string(original, fv->mbvfv_value);
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 /*
@@ -1505,17 +1505,17 @@ static int var_set_initial(prte_mca_base_var_t *var, prte_mca_base_var_t *origin
        warning if they try to set a value from the environment or a
        file. */
     ret = var_set_from_env(var, original);
-    if (PRTE_ERR_NOT_FOUND != ret) {
+    if (PMIX_ERR_NOT_FOUND != ret) {
         return ret;
     }
 
     ret = var_set_from_file(var, original, &prte_mca_base_envar_file_values);
-    if (PRTE_ERR_NOT_FOUND != ret) {
+    if (PMIX_ERR_NOT_FOUND != ret) {
         return ret;
     }
 
     ret = var_set_from_file(var, original, &prte_mca_base_var_file_values);
-    if (PRTE_ERR_NOT_FOUND != ret) {
+    if (PMIX_ERR_NOT_FOUND != ret) {
         return ret;
     }
 
@@ -1683,7 +1683,7 @@ static int var_value_string(prte_mca_base_var_t *var, char **value_string)
             break;
         }
 
-        ret = (0 > ret) ? PRTE_ERR_OUT_OF_RESOURCE : PRTE_SUCCESS;
+        ret = (0 > ret) ? PMIX_ERR_OUT_OF_RESOURCE : PRTE_SUCCESS;
     } else {
         /* we use an enumerator to handle string->bool and bool->string conversion */
         if (PRTE_MCA_BASE_VAR_TYPE_BOOL == var->mbv_type) {
@@ -1712,13 +1712,13 @@ int prte_mca_base_var_check_exclusive(const char *project, const char *type_a,
     var_ai = prte_mca_base_var_find(project, type_a, component_a, param_a);
     var_bi = prte_mca_base_var_find(project, type_b, component_b, param_b);
     if (var_bi < 0 || var_ai < 0) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     (void) var_get(var_ai, &var_a, true);
     (void) var_get(var_bi, &var_b, true);
     if (NULL == var_a || NULL == var_b) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (PRTE_MCA_BASE_VAR_SOURCE_DEFAULT != var_a->mbv_source
@@ -1739,7 +1739,7 @@ int prte_mca_base_var_check_exclusive(const char *project, const char *type_a,
         free(str_a);
         free(str_b);
 
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     return PRTE_SUCCESS;
@@ -1776,7 +1776,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         }
         /* just for protection... */
         if (NULL == original) {
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
     }
 
@@ -1797,7 +1797,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
     source_string = source_name(var);
     if (NULL == source_string) {
         free(value_string);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     if (PRTE_MCA_BASE_VAR_DUMP_PARSABLE == output_type) {
@@ -1812,7 +1812,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         if (NULL == *out) {
             free(value_string);
             free(source_string);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         /* build the message*/
@@ -1886,7 +1886,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         if (NULL == *out) {
             free(value_string);
             free(source_string);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         pmix_asprintf(out[0],
@@ -1951,7 +1951,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         if (NULL == *out) {
             free(value_string);
             free(source_string);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         pmix_asprintf(out[0], "%s=%s (%s)", var->mbv_full_name, value_string, source_string);

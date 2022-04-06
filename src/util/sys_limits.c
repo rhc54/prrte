@@ -120,7 +120,7 @@ int prte_util_init_sys_limits(char **errmsg)
     /* parse the requested limits to set */
     lims = pmix_argv_split(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* each limit is expressed as a "param:value" pair */

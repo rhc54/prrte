@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@ int prte_hwloc_base_set_process_membind_policy(void)
     /* Make sure prte_hwloc_topology has been set by the time we've
        been called */
     if (PRTE_SUCCESS != prte_hwloc_base_get_topology()) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* Set the default memory allocation policy according to MCA
@@ -51,7 +51,7 @@ int prte_hwloc_base_set_process_membind_policy(void)
 
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        rc = PMIX_ERR_OUT_OF_RESOURCE;
     } else {
         int e;
         hwloc_get_cpubind(prte_hwloc_topology, cpuset, 0);
@@ -88,7 +88,7 @@ int prte_hwloc_base_memory_set(prte_hwloc_base_memory_segment_t *segments, size_
        bind our memory there, too. */
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        rc = PMIX_ERR_OUT_OF_RESOURCE;
         msg = "hwloc_bitmap_alloc() failure";
         goto out;
     }
@@ -137,7 +137,7 @@ int prte_hwloc_base_membind(prte_hwloc_base_memory_segment_t *segs, size_t count
 
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        rc = PMIX_ERR_OUT_OF_RESOURCE;
         msg = "hwloc_bitmap_alloc() failure";
         goto out;
     }

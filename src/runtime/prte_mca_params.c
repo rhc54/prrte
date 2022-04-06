@@ -206,7 +206,7 @@ int prte_register_params(void)
          "open" failing is not printed */
         prte_show_help("help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
-        return PRTE_ERR_NOT_AVAILABLE;
+        return PMIX_ERR_NOT_AVAILABLE;
     }
 
     prte_set_max_sys_limits = NULL;

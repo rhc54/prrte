@@ -12,7 +12,7 @@
  * Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,7 @@
 
 int prte_backtrace_print(FILE *file, char *prefix, int strip)
 {
-    return PRTE_ERR_NOT_IMPLEMENTED;
+    return PMIX_ERR_NOT_IMPLEMENTED;
 }
 
 int prte_backtrace_buffer(char ***message_out, int *len_out)
@@ -36,5 +36,5 @@ int prte_backtrace_buffer(char ***message_out, int *len_out)
     *message_out = NULL;
     *len_out = 0;
 
-    return PRTE_ERR_NOT_IMPLEMENTED;
+    return PMIX_ERR_NOT_IMPLEMENTED;
 }

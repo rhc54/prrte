@@ -394,7 +394,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     }
     pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto cleanup;
     }
 

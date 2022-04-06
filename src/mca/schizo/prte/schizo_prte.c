@@ -896,7 +896,7 @@ static int parse_env(char **srcenv, char ***dstenv,
                         free(param);
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                 }
                 free(param);
@@ -911,7 +911,7 @@ static int parse_env(char **srcenv, char ***dstenv,
                                        xvals[i]);
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                 }
             }

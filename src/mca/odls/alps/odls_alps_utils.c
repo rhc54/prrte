@@ -88,7 +88,7 @@ int prte_odls_alps_get_rdma_creds(void)
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_put_request returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit;
     }
 
@@ -97,7 +97,7 @@ int prte_odls_alps_get_rdma_creds(void)
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_get_response returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alps_status));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit;
     }
 
@@ -106,7 +106,7 @@ int prte_odls_alps_get_rdma_creds(void)
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit;
     }
 
@@ -119,7 +119,7 @@ int prte_odls_alps_get_rdma_creds(void)
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_put_request returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit;
     }
 
@@ -128,13 +128,13 @@ int prte_odls_alps_get_rdma_creds(void)
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_get_response returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alps_status));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit;
     }
 
     rdmacred_rsp = (alpsAppLLIGni_t *) malloc(alps_count);
     if (NULL == rdmacred_rsp) {
-        ret = PRTE_ERR_OUT_OF_RESOURCE;
+        ret = PMIX_ERR_OUT_OF_RESOURCE;
         goto fn_exit;
     }
 
@@ -146,7 +146,7 @@ int prte_odls_alps_get_rdma_creds(void)
                              "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
         free(rdmacred_rsp);
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit;
     }
 

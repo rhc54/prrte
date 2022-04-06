@@ -616,7 +616,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     session_dir = filem_session_dir();
     if (NULL == session_dir) {
         /* we were unable to find any suitable directory */
-        rc = PRTE_ERR_BAD_PARAM;
+        rc = PMIX_ERR_BAD_PARAM;
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -878,8 +878,8 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
     fp = popen(cmd, "r");
     free(cmd);
     if (NULL == fp) {
-        PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-        return PRTE_ERR_FILE_OPEN_FAILURE;
+        PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+        return PMIX_ERR_FILE_OPEN_FAILURE;
     }
     /* because app_contexts might share part or all of a
      * directory tree, but link to different files, we
@@ -1021,7 +1021,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         tmp = pmix_dirname(incoming->fullpath);
         if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
             PMIX_ERROR_LOG(rc);
-            send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
+            send_complete(file, PMIX_ERR_FILE_WRITE_FAILURE);
             free(file);
             free(tmp);
             PMIX_RELEASE(incoming);
@@ -1033,7 +1033,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                 > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU))) {
                 prte_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             incoming->fullpath);
-                send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
+                send_complete(file, PMIX_ERR_FILE_WRITE_FAILURE);
                 free(file);
                 free(tmp);
                 return;
@@ -1043,7 +1043,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                                          S_IRUSR | S_IWUSR))) {
                 prte_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             incoming->fullpath);
-                send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
+                send_complete(file, PMIX_ERR_FILE_WRITE_FAILURE);
                 free(file);
                 free(tmp);
                 return;
@@ -1121,19 +1121,19 @@ static void write_handler(int fd, short event, void *cbdata)
                 } else if (PRTE_FILEM_TYPE_GZIP == sink->type) {
                     pmix_asprintf(&cmd, "tar xzf %s", sink->file);
                 } else {
-                    PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
                 if (NULL == getcwd(homedir, sizeof(homedir))) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
                 dirname = pmix_dirname(sink->fullpath);
                 if (0 != chdir(dirname)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
                 PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -1141,12 +1141,12 @@ static void write_handler(int fd, short event, void *cbdata)
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file, cmd));
                 if (0 != system(cmd)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
                 if (0 != chdir(homedir)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
                 free(dirname);
@@ -1154,7 +1154,7 @@ static void write_handler(int fd, short event, void *cbdata)
                 /* setup the link points */
                 if (PRTE_SUCCESS != (rc = link_archive(sink))) {
                     PRTE_ERROR_LOG(rc);
-                    send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
                 } else {
                     send_complete(sink->file, PRTE_SUCCESS);
                 }
@@ -1185,7 +1185,7 @@ static void write_handler(int fd, short event, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file, strerror(errno)));
             PMIX_RELEASE(output);
             pmix_list_remove_item(&incoming_files, &sink->super);
-            send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+            send_complete(sink->file, PMIX_ERR_FILE_WRITE_FAILURE);
             PMIX_RELEASE(sink);
             return;
         } else if (num_written < output->numbytes) {

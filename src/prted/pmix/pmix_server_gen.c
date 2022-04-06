@@ -489,7 +489,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
 
     if (NULL == req) {
         /* we are hosed */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
         return;
     }
@@ -773,7 +773,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                     } else {
                         /* get the proc object for this proc */
                         if (NULL == (proc = prte_get_proc_object(&targets[n]))) {
-                            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                             continue;
                         }
                         PMIX_RETAIN(proc);

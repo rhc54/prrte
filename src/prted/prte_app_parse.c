@@ -116,7 +116,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
 
     /* See if we have anything left */
     if (NULL == results.tail) {
-        rc = PRTE_ERR_NOT_FOUND;
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
     /* Setup application context */
@@ -207,7 +207,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
             prte_show_help("help-prun.txt", "prun:negative-nprocs", true,
                            prte_tool_basename,
                            app->app.argv[0], count, NULL);
-            return PRTE_ERR_FATAL;
+            return PMIX_ERR_FATAL;
         }
         /* we don't require that the user provide --np or -n because
          * the cmd line might stipulate a mapping policy that computes
@@ -242,7 +242,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     if (NULL == app->app.cmd) {
         prte_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
                        "strdup returned NULL", errno);
-        rc = PRTE_ERR_NOT_FOUND;
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -260,7 +260,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                 /* find the '=' that delineates the option from the path */
                 if (NULL == (dptr = strchr(app->app.argv[i], '='))) {
                     /* that's just wrong */
-                    rc = PRTE_ERR_BAD_PARAM;
+                    rc = PMIX_ERR_BAD_PARAM;
                     goto cleanup;
                 }
                 /* step over the '=' */

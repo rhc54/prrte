@@ -4,7 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@ int prte_reachable_base_select(void)
                                 (prte_mca_base_module_t **) &best_module,
                                 (prte_mca_base_component_t **) &best_component, NULL)) {
         /* notify caller that no available component found */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* Save the winner */

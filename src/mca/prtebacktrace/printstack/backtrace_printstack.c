@@ -13,7 +13,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,5 +50,5 @@ int prte_backtrace_buffer(char ***message_out, int *len_out)
        printstack is implemented.  I just don't have time right
        now. */
 
-    return PRTE_ERR_NOT_IMPLEMENTED;
+    return PMIX_ERR_NOT_IMPLEMENTED;
 }

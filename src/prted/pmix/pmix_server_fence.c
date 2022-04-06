@@ -294,7 +294,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, req->tproc.rank);
     if (NULL == proct) {
         /* if we find the job, but not the process, then that is an error */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prc = PMIX_ERR_NOT_FOUND;
         goto callback;
     }
@@ -303,7 +303,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         /* we don't know where this proc is located - since we already
          * found the job, and therefore know about its locations, this
          * must be an error */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prc = PMIX_ERR_NOT_FOUND;
         goto callback;
     }

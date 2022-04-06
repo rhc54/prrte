@@ -151,11 +151,11 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
             root = hwloc_get_root_obj(node->topology->topo);
             if (NULL == root->userdata) {
                 /* incorrect */
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
                 if (NULL != job_cpuset) {
                     free(job_cpuset);
                 }
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             rdata = (prte_hwloc_topo_data_t *) root->userdata;
             available = hwloc_bitmap_dup(rdata->available);
@@ -203,12 +203,12 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                     /* get the hwloc object */
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, k);
                     if (NULL == obj) {
-                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
                             free(job_cpuset);
                         }
-                        return PRTE_ERR_NOT_FOUND;
+                        return PMIX_ERR_NOT_FOUND;
                     }
                     npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
                                                     available, obj);

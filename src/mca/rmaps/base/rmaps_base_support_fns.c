@@ -508,7 +508,7 @@ complete:
             /* let the caller know that the resources exist,
              * but are currently busy
              */
-            return PRTE_ERR_RESOURCE_BUSY;
+            return PMIX_ERR_RESOURCE_BUSY;
         } else {
             prte_show_help("help-prte-rmaps-base.txt",
                            "prte-rmaps-base:all-available-resources-used", true);
@@ -548,7 +548,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
     proc->app_idx = idx;
     app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, idx);
     if (NULL == app) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         PMIX_RELEASE(proc);
         return NULL;
     }

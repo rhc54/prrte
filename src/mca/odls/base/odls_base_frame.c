@@ -276,7 +276,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
         return PRTE_ERROR;
     }
     if (0 != sigprocmask(SIG_UNBLOCK, &unblock, NULL)) {
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
     }
 
     /* check if the user requested that we display output in xterms */

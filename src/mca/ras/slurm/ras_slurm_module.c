@@ -160,9 +160,9 @@ static int init(void)
 
         /* obtain a socket for our use */
         if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             free(slurm_host);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         /* connect to the Slurm dynamic allocation port */
@@ -260,12 +260,12 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
             return ret;
         }
         prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     regexp = strdup(slurm_node_str);
     if (NULL == regexp) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     if (prte_ras_slurm_component.use_all) {
@@ -281,13 +281,13 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
             prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_JOB_CPUS_PER_NODE");
             free(regexp);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
         node_tasks = strdup(tasks_per_node);
         if (NULL == node_tasks) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             free(regexp);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         cpus_per_task = 1;
     } else {
@@ -298,13 +298,13 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
             prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_TASKS_PER_NODE");
             free(regexp);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
         node_tasks = strdup(tasks_per_node);
         if (NULL == node_tasks) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             free(regexp);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         /* get the number of CPUs per task that the user provided to slurm */
@@ -393,8 +393,8 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
     orig = base = strdup(regexp);
     if (NULL == base) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -429,9 +429,9 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             /* we found a special character at the beginning of the string */
             prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_NODELIST");
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             free(orig);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
 
         if (found_range) {
@@ -446,9 +446,9 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
                 /* we didn't find the end of the range */
                 prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                                tasks_per_node, "SLURM_NODELIST");
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
                 free(orig);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
 
             ret = prte_ras_slurm_parse_ranges(base, base + i + 1, &names);
@@ -490,16 +490,16 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
     slots = malloc(sizeof(int) * num_nodes);
     if (NULL == slots) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     memset(slots, 0, sizeof(int) * num_nodes);
 
     orig = begptr = strdup(tasks_per_node);
     if (NULL == begptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         free(slots);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     j = 0;
@@ -537,10 +537,10 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         } else {
             prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_TASKS_PER_NODE");
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             free(slots);
             free(orig);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
 
@@ -558,9 +558,9 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
         node = PMIX_NEW(prte_node_t);
         if (NULL == node) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             free(slots);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         node->name = strdup(names[i]);
         node->state = PRTE_NODE_STATE_UP;
@@ -658,8 +658,8 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
         }
     }
     if (!found) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* Look for the end of the first number */
@@ -690,8 +690,8 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
         }
     }
     if (!found) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* Make strings for all values in the range */
@@ -699,8 +699,8 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
     len = base_len + num_str_len + 32;
     str = malloc(len);
     if (NULL == str) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     strcpy(str, base);
     for (i = start; i <= end; ++i) {
@@ -967,7 +967,7 @@ static int dyn_allocate(prte_job_t *jdata)
 
     if (NULL == prte_ras_slurm_component.config_file) {
         prte_output(0, "Cannot perform dynamic allocation as no Slurm configuration file provided");
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* track this request */
@@ -1087,7 +1087,7 @@ static int parse_alloc_msg(char *msg, int *idx, int *sjob, char **nodelist, char
     int found = 0;
 
     if (msg == NULL || strlen(msg) == 0) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     tmp = strdup(msg);
@@ -1115,7 +1115,7 @@ static int parse_alloc_msg(char *msg, int *idx, int *sjob, char **nodelist, char
     free(tmp);
 
     if (4 != found) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     return PRTE_SUCCESS;
 }
@@ -1179,11 +1179,11 @@ static int read_ip_port(char *filename, char **ip, uint16_t *port)
     fclose(fp);
     if (!found_ip) {
         prte_output(0, "The IP address or name of the Slurm control machine was not provided");
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     if (!found_port) {
         prte_output(0, "The IP port of the Slurm dynamic allocation service was not provided");
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     return PRTE_SUCCESS;

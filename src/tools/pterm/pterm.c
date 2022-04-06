@@ -215,7 +215,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
 
 int main(int argc, char *argv[])
 {
-    int rc = PRTE_ERR_FATAL, i;
+    int rc = PMIX_ERR_FATAL, i;
     prte_pmix_lock_t lock, rellock;
     pmix_info_t info, *iptr;
     pmix_status_t ret;
@@ -350,14 +350,14 @@ int main(int argc, char *argv[])
                 /* malformed input */
                 prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                                "--pid", opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
                 prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             rc = fscanf(fp, "%lu", (unsigned long *) &pid);
             if (1 != rc) {
@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
                  * require, then error out */
                 prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             fclose(fp);
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);

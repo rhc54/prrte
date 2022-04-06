@@ -12,7 +12,7 @@
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@ BEGIN_C_DECLS
  * the corresponding message string.  The result is returned in a
  * static buffer that should not be released with free().
  *
- * If errnum is \c PRTE_ERR_IN_ERRNO, the system strerror is called
+ * If errnum is \c PMIX_ERR_IN_ERRNO, the system strerror is called
  * with an argument of the current value of \c errno and the resulting
  * string is returned.
  *

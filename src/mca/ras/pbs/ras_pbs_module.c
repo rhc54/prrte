@@ -70,8 +70,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* get our PBS jobid from the environment */
     if (NULL == (pbs_jobid = getenv("PBS_JOBID"))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* save that value in the global job ident string for
@@ -89,7 +89,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      */
     if (pmix_list_is_empty(nodes)) {
         prte_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* record the number of allocated nodes */
@@ -144,7 +144,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     if (prte_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
             prte_show_help("help-ras-pbs.txt", "smp-error", true);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
         ppn = strtol(cppn, NULL, 10);
     } else {
@@ -155,12 +155,12 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     filename = getenv("PBS_NODEFILE");
     if (NULL == filename) {
         prte_show_help("help-ras-pbs.txt", "no-nodefile", true);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     fp = fopen(filename, "r");
     if (NULL == fp) {
-        PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-        return PRTE_ERR_FILE_OPEN_FAILURE;
+        PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+        return PMIX_ERR_FILE_OPEN_FAILURE;
     }
 
     /* Iterate through all the nodes and make an entry for each.  PBS
@@ -183,7 +183,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
                 if (prte_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
                     prte_show_help("help-ras-pbs.txt", "smp-multi", true);
-                    return PRTE_ERR_BAD_PARAM;
+                    return PMIX_ERR_BAD_PARAM;
                 }
                 ++node->slots;
 

@@ -306,10 +306,10 @@ static void spawn_timeout_cb(int fd, short event, void *cbdata)
 
     /* abort the job */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
-    jdata->exit_code = PRTE_ERR_TIMEOUT;
+    jdata->exit_code = PMIX_ERR_TIMEOUT;
 
     if (!prte_persistent) {
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_TIMEOUT);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_TIMEOUT);
     }
 }
 
@@ -343,7 +343,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
             jdata = prte_get_job_data_object(nspace);
         }
         if (NULL == jdata) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             free(nspace);
             return;
         }
@@ -380,7 +380,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
         cnt = 1;
     }
     if (NULL == jdata) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         return;
     }
     jdata->ntraces++;
@@ -479,7 +479,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
     PMIX_LOAD_PROCID(&pc, jdata->nspace, PMIX_RANK_WILDCARD);
     PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
     free(st);
-    PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_TIMEOUT);
+    PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_TIMEOUT);
 
     /* see if they want proc states reported */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PMIX_BOOL)) {
@@ -936,8 +936,8 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         nptr = NULL;
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC) ||
             NULL == nptr) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            return PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            return PMIX_ERR_NOT_FOUND;
         }
 
         /* direct an event back to our controller */
@@ -992,8 +992,8 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
     rmptr = &room;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* if the originator is me, then just do the notification */
@@ -1151,7 +1151,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     }
     if (NULL
         == (daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, sender->rank))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
@@ -1216,7 +1216,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     }
     if (NULL == t) {
         /* should never happen */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
@@ -1285,7 +1285,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
             /* this is not allowed - a coprocessor cannot be host
              * to another coprocessor at this time
              */
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_SUPPORTED);
             prted_failed_launch = true;
             free(coprocessors);
             goto CLEANUP;
@@ -1382,13 +1382,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     /* get my endianness */
     mytopo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == mytopo) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
     myendian = strrchr(mytopo->sig, ':');
     if (NULL == myendian) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
@@ -1405,7 +1405,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         /* update state and record for this daemon contact info */
         daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, dname.rank);
         if (NULL == daemon) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             prted_failed_launch = true;
             goto CLEANUP;
         }
@@ -1860,7 +1860,7 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t
 
     /* find the daemon and update its state/status */
     if (NULL == (daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, vpid))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto finish;
     }
     daemon->state = PRTE_PROC_STATE_FAILED_TO_START;
@@ -2107,8 +2107,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if (NULL == (daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     if (NULL == daemons->map) {
         daemons->map = PMIX_NEW(prte_job_map_t);
@@ -2139,8 +2139,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
              */
             node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
             if (NULL == node) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                return PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                return PMIX_ERR_NOT_FOUND;
             }
             pmix_pointer_array_add(map->nodes, (void *) node);
             ++(map->num_nodes);
@@ -2239,8 +2239,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             /* if the HNP has some procs, then we are still good */
             node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
             if (NULL == node) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                return PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                return PMIX_ERR_NOT_FOUND;
             }
             if (0 < node->num_procs) {
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -2256,7 +2256,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
              * anyone else...then we have a big problem
              */
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-            return PRTE_ERR_FATAL;
+            return PMIX_ERR_FATAL;
         }
         goto process;
     }
@@ -2272,8 +2272,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
          */
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
         if (NULL == node) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            return PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            return PMIX_ERR_NOT_FOUND;
         }
         pmix_pointer_array_add(map->nodes, (void *) node);
         ++(map->num_nodes);
@@ -2488,8 +2488,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     if (prte_hnp_is_allocated) {
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
         if (NULL == node) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            return PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            return PMIX_ERR_NOT_FOUND;
         }
         PMIX_RETAIN(node);
         pmix_list_prepend(&nodes, &node->super);
@@ -2592,15 +2592,15 @@ process:
         /* create a new daemon object for this node */
         proc = PMIX_NEW(prte_proc_t);
         if (NULL == proc) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         PMIX_LOAD_NSPACE(&proc->name, PRTE_PROC_MY_NAME->nspace);
         if (PMIX_RANK_VALID - 1 <= daemons->num_procs) {
             /* no more daemons available */
             prte_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         proc->name.rank = daemons->num_procs; /* take the next available vpid */
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,

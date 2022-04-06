@@ -513,14 +513,14 @@ int prun(int argc, char *argv[])
                 /* malformed input */
                 prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                                "--pid", opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
                 prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             rc = fscanf(fp, "%lu", (unsigned long *) &pid);
             if (1 != rc) {
@@ -529,7 +529,7 @@ int prun(int argc, char *argv[])
                 prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 fclose(fp);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             fclose(fp);
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
@@ -537,7 +537,7 @@ int prun(int argc, char *argv[])
                 prte_show_help("help-prun.txt", "bad-option-input", true,
                                prte_tool_basename, "--pid",
                                opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
         }
     }
     opt = pmix_cmd_line_get_param(&results, "namespace");
@@ -699,13 +699,13 @@ int prun(int argc, char *argv[])
                 if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
                     if (NULL != outfile) {
                         prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     if (NULL == ptr) {
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "directory", "directory");
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     /* If the given filename isn't an absolute path, then
                      * convert it to one so the name will be relative to
@@ -714,7 +714,7 @@ int prun(int argc, char *argv[])
                     if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
                             goto DONE;
                         }
                         outdir = pmix_os_path(false, cwd, ptr, NULL);
@@ -726,13 +726,13 @@ int prun(int argc, char *argv[])
                 if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
                     if (NULL != outdir) {
                         prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     if (NULL == ptr) {
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "filename", "filename");
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     /* If the given filename isn't an absolute path, then
                      * convert it to one so the name will be relative to
@@ -741,7 +741,7 @@ int prun(int argc, char *argv[])
                     if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
                             goto DONE;
                         }
                         outfile = pmix_os_path(false, cwd, ptr, NULL);

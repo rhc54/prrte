@@ -319,7 +319,7 @@ lookup:
             prte_show_help("help-plm-ssh.txt", "agent-not-found", true,
                            prte_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
-            return PRTE_ERR_FATAL;
+            return PMIX_ERR_FATAL;
         }
         /* this isn't an error - we just cannot be selected */
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -412,7 +412,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:ssh_lookup on agent (null) path %s - No agent specified.",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == path) ? "NULL" : path));
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -421,7 +421,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
                          (NULL == agent_list) ? prte_plm_ssh_component.agent : agent_list,
                          (NULL == path) ? "NULL" : path));
     if (NULL == (prte_plm_ssh_component.agent_argv = prte_plm_ssh_search(agent_list, path))) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* if we got here, then one of the given agents could be found - the

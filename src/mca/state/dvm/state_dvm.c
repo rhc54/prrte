@@ -386,7 +386,7 @@ static void job_started(int fd, short args, void *cbdata)
         nptr = NULL;
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
             || NULL == nptr) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             return;
         }
         timestamp = time(NULL);
@@ -429,7 +429,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     nptr = NULL;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
         || NULL == nptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto DONE;
     }
     timestamp = time(NULL);
@@ -787,7 +787,7 @@ release:
     /* remove the session directory tree */
     if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
     } else {
         pmix_os_dirpath_destroy(tmp, true, NULL);
         free(tmp);

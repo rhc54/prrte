@@ -138,7 +138,7 @@ static int process_repository_item(const char *filename, void *data)
         if (NULL == component_list) {
             free(base);
             /* OOM. nothing to do but fail */
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         ret = pmix_hash_table_set_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
@@ -163,7 +163,7 @@ static int process_repository_item(const char *filename, void *data)
     ri = PMIX_NEW(prte_mca_base_component_repository_item_t);
     if (NULL == ri) {
         free(base);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     ri->ri_base = base;
@@ -171,7 +171,7 @@ static int process_repository_item(const char *filename, void *data)
     ri->ri_path = strdup(filename);
     if (NULL == ri->ri_path) {
         PMIX_RELEASE(ri);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     pmix_string_copy(ri->ri_type, type, PRTE_MCA_BASE_MAX_TYPE_NAME_LEN);
@@ -298,7 +298,7 @@ int prte_mca_base_component_repository_get_components(prte_mca_base_framework_t 
                                          strlen(framework->framework_name),
                                          (void **) framework_components);
 #else
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 #endif
 }
 
@@ -369,9 +369,9 @@ int prte_mca_base_component_repository_retain_component(const char *type, const 
         return PRTE_SUCCESS;
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 #else
-    return PRTE_ERR_NOT_SUPPORTED;
+    return PMIX_ERR_NOT_SUPPORTED;
 #endif
 }
 
@@ -403,7 +403,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
         if (0 == strcmp(mitem->cli_component->mca_component_name, ri->ri_name)) {
             prte_output_verbose(PRTE_MCA_BASE_VERBOSE_INFO, 0,
                                 "mca_base_component_repository_open: already loaded (ignored)");
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
 
@@ -416,7 +416,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
             "mca_base_component_repository_open: already loaded. returning cached component");
         mitem = PMIX_NEW(prte_mca_base_component_list_item_t);
         if (NULL == mitem) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         mitem->cli_component = ri->ri_component_struct;
@@ -430,7 +430,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
          * another framework. if this happens it is likely a MCA base
          * bug so assert */
         assert(0);
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
     }
 
     /* Now try to load the component */
@@ -460,13 +460,13 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
             if (0 > asprintf(&(f_comp->error_msg), "%s", err_msg)) {
                 PMIX_RELEASE(f_comp);
                 free(err_msg);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             pmix_list_append(&framework->framework_failed_components, &f_comp->super);
         }
 
         free(err_msg);
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* Successfully opened the component; now find the public struct.
@@ -475,13 +475,13 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
     do {
         ret = pmix_asprintf(&struct_name, "prte_%s_%s_component", ri->ri_type, ri->ri_name);
         if (0 > ret) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
+            ret = PMIX_ERR_OUT_OF_RESOURCE;
             break;
         }
 
         mitem = PMIX_NEW(prte_mca_base_component_list_item_t);
         if (NULL == mitem) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
+            ret = PMIX_ERR_OUT_OF_RESOURCE;
             break;
         }
 
@@ -497,7 +497,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
                 "%s MCA dynamic component (ignored): %s. ret %d",
                 ri->ri_base, ri->ri_type, err_msg, ret);
 
-            ret = PRTE_ERR_BAD_PARAM;
+            ret = PMIX_ERR_BAD_PARAM;
             break;
         }
 
@@ -517,7 +517,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
                 component_struct->mca_minor_version, component_struct->mca_release_version,
                 PRTE_MCA_BASE_VERSION_MAJOR, PRTE_MCA_BASE_VERSION_MINOR,
                 PRTE_MCA_BASE_VERSION_RELEASE);
-            ret = PRTE_ERR_BAD_PARAM;
+            ret = PMIX_ERR_BAD_PARAM;
             break;
         }
 
@@ -530,7 +530,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
                 "Component file data does not match filename: %s (%s / %s) != %s %s -- ignored",
                 ri->ri_path, ri->ri_type, ri->ri_name, component_struct->mca_type_name,
                 component_struct->mca_component_name);
-            ret = PRTE_ERR_BAD_PARAM;
+            ret = PMIX_ERR_BAD_PARAM;
             break;
         }
 
@@ -564,7 +564,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
 #else
 
     /* no dlopen support */
-    return PRTE_ERR_NOT_SUPPORTED;
+    return PMIX_ERR_NOT_SUPPORTED;
 #endif
 }
 

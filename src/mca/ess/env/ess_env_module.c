@@ -125,15 +125,15 @@ static int env_set_name(void)
     pmix_rank_t vpid;
 
     if (NULL == prte_ess_base_nspace) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
 
     if (NULL == prte_ess_base_vpid) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
     PRTE_PROC_MY_NAME->rank = vpid;

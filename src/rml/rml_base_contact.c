@@ -43,9 +43,9 @@ int prte_rml_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
     char *cinfo = strdup(uri);
     char *ptr = strchr(cinfo, ';');
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         free(cinfo);
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     *ptr = '\0';
     ptr++;

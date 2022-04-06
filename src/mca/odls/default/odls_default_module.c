@@ -232,20 +232,20 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     char *str;
 
     if (NULL == file || NULL == topic) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     str = prte_show_help_vstring(file, topic, true, ap);
 
     msg->file_str_len = (int) strlen(file);
     if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     msg->topic_str_len = (int) strlen(topic);
     if (msg->topic_str_len > PRTE_ODLS_MAX_TOPIC_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     msg->msg_str_len = (int) strlen(str);
 
@@ -614,12 +614,12 @@ static int odls_default_fork_local_proc(void *cdptr)
        then the exec() succeeded.  If the parent reads something from
        the pipe, then the child was letting us know why it failed. */
     if (pipe(p) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
         if (NULL != child) {
             child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PRTE_ERR_SYS_LIMITS_PIPES;
+            child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
         }
-        return PRTE_ERR_SYS_LIMITS_PIPES;
+        return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
     /* Fork off the child */
@@ -629,12 +629,12 @@ static int odls_default_fork_local_proc(void *cdptr)
     }
 
     if (pid < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
         if (NULL != child) {
             child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PRTE_ERR_SYS_LIMITS_CHILDREN;
+            child->exit_code = PMIX_ERR_SYS_LIMITS_CHILDREN;
         }
-        return PRTE_ERR_SYS_LIMITS_CHILDREN;
+        return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
 
     if (pid == 0) {
@@ -699,7 +699,7 @@ static int send_signal(pid_t pd, int signal)
     if (kill(pid, signal) != 0) {
         switch (errno) {
         case EINVAL:
-            rc = PRTE_ERR_BAD_PARAM;
+            rc = PMIX_ERR_BAD_PARAM;
             break;
         case ESRCH:
             /* This case can occur when we deliver a signal to a
@@ -709,7 +709,7 @@ static int send_signal(pid_t pd, int signal)
                ignore the error.  */
             break;
         case EPERM:
-            rc = PRTE_ERR_PERM;
+            rc = PMIX_ERR_NO_PERMISSIONS;
             break;
         default:
             rc = PRTE_ERROR;

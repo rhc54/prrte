@@ -86,8 +86,8 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
     /* create the new object */
     *dest = PMIX_NEW(prte_app_context_t);
     if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* copy data into it */
@@ -134,8 +134,8 @@ int prte_map_copy(struct prte_job_map_t **d, struct prte_job_map_t *s)
     /* create the new object */
     *dest = PMIX_NEW(prte_job_map_t);
     if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* copy data into it */

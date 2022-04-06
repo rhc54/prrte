@@ -13,7 +13,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +49,7 @@ int prte_common_alps_proc_in_pagg(bool *flag)
     char task_is_app_fname[PATH_MAX];
 
     if (flag == NULL) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     fd = fopen(proc_job_file, "r");

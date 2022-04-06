@@ -73,13 +73,13 @@ static int register_cb_type(prte_grpcomm_rbcast_cb_t callback)
             return i;
         }
     }
-    return PRTE_ERR_OUT_OF_RESOURCE;
+    return PMIX_ERR_OUT_OF_RESOURCE;
 }
 
 static int unregister_cb_type(int type)
 {
     if (RBCAST_CB_TYPE_MAX < type || 0 > type) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     prte_grpcomm_rbcast_cb[type] = NULL;
     return PRTE_SUCCESS;

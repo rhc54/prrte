@@ -113,7 +113,7 @@ char *prte_util_print_name_args(const pmix_proc_t *name)
         /* get the next buffer */
         ptr = get_print_name_buffer();
         if (NULL == ptr) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             return prte_print_args_null;
         }
         /* cycle around the ring */
@@ -136,7 +136,7 @@ char *prte_util_print_name_args(const pmix_proc_t *name)
     ptr = get_print_name_buffer();
 
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_print_args_null;
     }
 
@@ -157,7 +157,7 @@ char *prte_util_print_jobids(const pmix_nspace_t job)
     ptr = get_print_name_buffer();
 
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_print_args_null;
     }
 
@@ -182,7 +182,7 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
     ptr = get_print_name_buffer();
 
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_print_args_null;
     }
 
@@ -217,7 +217,7 @@ char *prte_util_print_local_jobid(const pmix_nspace_t job)
     ptr = get_print_name_buffer();
 
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_print_args_null;
     }
 
@@ -250,7 +250,7 @@ char *prte_util_print_vpids(const pmix_rank_t vpid)
     ptr = get_print_name_buffer();
 
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_print_args_null;
     }
 
@@ -291,8 +291,8 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
         *vpid_string = strdup("UNDEFINED");
     } else {
         if (0 > pmix_asprintf(vpid_string, "%u", vpid)) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
     return PRTE_SUCCESS;
@@ -304,16 +304,16 @@ int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name
 
     /* check for NULL string - error */
     if (NULL == name_string) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     p = strrchr(name_string, '.'); /** get last field -> vpid */
 
     /* check for error */
     if (NULL == p) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     *p = '\0';
     PMIX_LOAD_NSPACE(name->nspace, name_string);
@@ -329,8 +329,8 @@ int prte_util_convert_process_name_to_string(char **name_string, const pmix_proc
     char *job, *rank;
 
     if (NULL == name) { /* got an error */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     job = prte_util_print_jobids(name->nspace);

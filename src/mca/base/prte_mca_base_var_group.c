@@ -109,14 +109,14 @@ int prte_mca_base_var_group_get_internal(const int group_index, prte_mca_base_va
                                          bool invalidok)
 {
     if (group_index < 0) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     *group = (prte_mca_base_var_group_t *) pmix_pointer_array_get_item(&mca_base_var_groups,
                                                                        group_index);
     if (NULL == *group || (!invalidok && !(*group)->group_isvalid)) {
         *group = NULL;
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     return PRTE_SUCCESS;
@@ -144,7 +144,7 @@ static int group_find_by_name(const char *full_name, int *index, bool invalidok)
         return PRTE_SUCCESS;
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 static bool compare_strings(const char *str1, const char *str2)
@@ -178,7 +178,7 @@ static int group_find_linear(const char *project_name, const char *framework_nam
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 static int group_find(const char *project_name, const char *framework_name,
@@ -188,7 +188,7 @@ static int group_find(const char *project_name, const char *framework_name,
     int ret, index = 0;
 
     if (!prte_mca_base_var_initialized) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* check for wildcards */
@@ -250,28 +250,28 @@ static int group_register(const char *project_name, const char *framework_name,
         group->group_project = strdup(project_name);
         if (NULL == group->group_project) {
             PMIX_RELEASE(group);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != framework_name) {
         group->group_framework = strdup(framework_name);
         if (NULL == group->group_framework) {
             PMIX_RELEASE(group);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != component_name) {
         group->group_component = strdup(component_name);
         if (NULL == group->group_component) {
             PMIX_RELEASE(group);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != description) {
         group->group_description = strdup(description);
         if (NULL == group->group_description) {
             PMIX_RELEASE(group);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 

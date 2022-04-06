@@ -98,23 +98,23 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_EVENT_REGISTRATION:
         return PMIX_ERR_EVENT_REGISTRATION;
 
-    case PRTE_ERR_NOT_IMPLEMENTED:
-    case PRTE_ERR_NOT_SUPPORTED:
+    case PMIX_ERR_NOT_IMPLEMENTED:
+    case PMIX_ERR_NOT_SUPPORTED:
         return PMIX_ERR_NOT_SUPPORTED;
 
-    case PRTE_ERR_NOT_FOUND:
+    case PMIX_ERR_NOT_FOUND:
         return PMIX_ERR_NOT_FOUND;
 
-    case PRTE_ERR_PERM:
-    case PRTE_ERR_UNREACH:
+    case PMIX_ERR_NO_PERMISSIONS:
+    case PMIX_ERR_UNREACH:
     case PRTE_ERR_SERVER_NOT_AVAIL:
         return PMIX_ERR_UNREACH;
 
-    case PRTE_ERR_BAD_PARAM:
+    case PMIX_ERR_BAD_PARAM:
         return PMIX_ERR_BAD_PARAM;
 
-    case PRTE_ERR_SYS_LIMITS_PIPES:
-    case PRTE_ERR_SYS_LIMITS_CHILDREN:
+    case PMIX_ERR_SYS_LIMITS_PIPES:
+    case PMIX_ERR_SYS_LIMITS_CHILDREN:
     case PRTE_ERR_SOCKET_NOT_AVAILABLE:
     case PRTE_ERR_NOT_ENOUGH_CORES:
     case PRTE_ERR_NOT_ENOUGH_SOCKETS:
@@ -123,26 +123,26 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_PIPE_READ_FAILURE:
         return PMIX_ERR_JOB_SYS_OP_FAILED;
 
-    case PRTE_ERR_OUT_OF_RESOURCE:
+    case PMIX_ERR_OUT_OF_RESOURCE:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
     case PRTE_ERR_DATA_VALUE_NOT_FOUND:
         return PMIX_ERR_DATA_VALUE_NOT_FOUND;
 
-    case PRTE_ERR_WDIR_NOT_FOUND:
+    case PMIX_ERR_JOB_WDIR_NOT_FOUND:
         return PMIX_ERR_JOB_WDIR_NOT_FOUND;
 
-    case PRTE_ERR_EXE_NOT_FOUND:
+    case PMIX_ERR_JOB_EXE_NOT_FOUND:
     case PRTE_ERR_EXE_NOT_ACCESSIBLE:
         return PMIX_ERR_JOB_EXE_NOT_FOUND;
 
-    case PRTE_ERR_TIMEOUT:
+    case PMIX_ERR_TIMEOUT:
         return PMIX_ERR_TIMEOUT;
 
-    case PRTE_ERR_WOULD_BLOCK:
+    case PMIX_ERR_WOULD_BLOCK:
         return PMIX_ERR_WOULD_BLOCK;
 
-    case PRTE_EXISTS:
+    case PMIX_EXISTS:
         return PMIX_EXISTS;
 
     case PRTE_ERR_PARTIAL_SUCCESS:
@@ -201,35 +201,35 @@ int prte_pmix_convert_status(pmix_status_t status)
         return PRTE_ERR_EVENT_REGISTRATION;
 
     case PMIX_ERR_NOT_SUPPORTED:
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
 
     case PMIX_ERR_NOT_FOUND:
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
 
     case PMIX_ERR_OUT_OF_RESOURCE:
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
 
     case PMIX_ERR_INIT:
         return PRTE_ERROR;
 
     case PMIX_ERR_BAD_PARAM:
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
 
     case PMIX_ERR_UNREACH:
     case PMIX_ERR_NO_PERMISSIONS:
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
 
     case PMIX_ERR_TIMEOUT:
-        return PRTE_ERR_TIMEOUT;
+        return PMIX_ERR_TIMEOUT;
 
     case PMIX_ERR_WOULD_BLOCK:
-        return PRTE_ERR_WOULD_BLOCK;
+        return PMIX_ERR_WOULD_BLOCK;
 
     case PMIX_ERR_LOST_CONNECTION:
         return PRTE_ERR_COMM_FAILURE;
 
     case PMIX_EXISTS:
-        return PRTE_EXISTS;
+        return PMIX_EXISTS;
 
     case PMIX_QUERY_PARTIAL_SUCCESS:
         return PRTE_ERR_PARTIAL_SUCCESS;
@@ -251,7 +251,7 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
     case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
-        return PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+        return PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
 
     default:
         return status;

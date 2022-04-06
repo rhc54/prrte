@@ -111,9 +111,9 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
 
     /* little protection */
     if (NULL == names || NULL == aliases) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         free(vpids);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* construct the string of node names for compression */
@@ -363,8 +363,8 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
         /* should never happen */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
     /* create the node pool array - this will include
@@ -904,7 +904,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         while (PMIX_SUCCESS == rc) {
             nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, drk);
             if (NULL == nptr) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
@@ -1219,7 +1219,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
             /* get the corresponding node object */
             if (NULL
                 == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, index))) {
-                rc = PRTE_ERR_NOT_FOUND;
+                rc = PMIX_ERR_NOT_FOUND;
                 PRTE_ERROR_LOG(rc);
                 goto error;
             }

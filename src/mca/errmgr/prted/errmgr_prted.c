@@ -225,7 +225,7 @@ cleanup:
     /* set a timer for exiting - this also gives the message a chance
      * to get out! */
     if (NULL == (timer = PMIX_NEW(prte_timer_t))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return;
     }
     timer->tv.tv_sec = 5;
@@ -405,7 +405,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (NULL
                 == (child = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                         proc->rank))) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 goto cleanup;
             }
@@ -458,7 +458,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     }
 
     if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto cleanup;
     }

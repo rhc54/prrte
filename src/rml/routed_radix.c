@@ -102,7 +102,7 @@ int prte_rml_route_lost(pmix_rank_t route)
                              "%s routed:radix: Connection to lifeline %s lost",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_VPID_PRINT(prte_rml_base.lifeline)));
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
 
     /* see if it is one of our children - if so, remove it */

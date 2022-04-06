@@ -112,7 +112,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             node = PMIX_NEW(prte_node_t);
             if (NULL == node) {
                 fclose(fp);
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             node->name = strdup(ptr);
             node->state = PRTE_NODE_STATE_UP;
@@ -135,7 +135,7 @@ cleanup:
      */
     if (pmix_list_is_empty(nodelist)) {
         prte_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     return PRTE_SUCCESS;

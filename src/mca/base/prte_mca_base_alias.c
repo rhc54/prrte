@@ -69,7 +69,7 @@ static int prte_mca_base_alias_setup(void)
 
     alias_hash_table = PMIX_NEW(pmix_hash_table_t);
     if (NULL == alias_hash_table) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     int ret = pmix_hash_table_init(alias_hash_table, 32);
@@ -137,7 +137,7 @@ int prte_mca_base_alias_register(const char *project, const char *framework,
                                  uint32_t alias_flags)
 {
     if (NULL == component_name) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     int ret = prte_mca_base_alias_setup();
@@ -152,7 +152,7 @@ int prte_mca_base_alias_register(const char *project, const char *framework,
     if (NULL == alias) {
         alias = PMIX_NEW(prte_mca_base_alias_t);
         if (NULL == alias) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         pmix_hash_table_set_value_ptr(alias_hash_table, name, strlen(name), alias);
@@ -164,7 +164,7 @@ int prte_mca_base_alias_register(const char *project, const char *framework,
     if (NULL == alias_item) {
         if (NULL != name)
             free(name);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     alias_item->component_alias = strdup(component_alias);

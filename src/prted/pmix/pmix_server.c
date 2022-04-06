@@ -424,7 +424,7 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
 {
     pmix_server_req_t *req = (pmix_server_req_t *) occupant;
     bool timeout = false;
-    int rc = PRTE_ERR_TIMEOUT;
+    int rc = PMIX_ERR_TIMEOUT;
     pmix_value_t *pval = NULL;
     pmix_status_t prc;
 
@@ -1058,7 +1058,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
          * will free it upon our return */
         req->data = (char *) malloc(sz);
         if (NULL == req->data) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         }
         memcpy(req->data, data, sz);
         req->sz = sz;
@@ -1158,12 +1158,12 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
     }
     if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, pproc.rank))) {
         /* this is truly an error, so notify the sender */
-        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
+        send_error(PMIX_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
     }
     if (!PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_LOCAL)) {
         /* send back an error - they obviously have made a mistake */
-        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
+        send_error(PMIX_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
     }
 
@@ -1320,7 +1320,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
             d->ndata = psz;
             d->data = (char *) malloc(psz);
             if (NULL == d->data) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
             }
             cnt = psz;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, d->data, &cnt, PMIX_BYTE))) {

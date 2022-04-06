@@ -96,7 +96,7 @@ struct prte_bp_graph_t {
 #define CHECK_VERTEX_RANGE(g, v)                 \
     do {                                         \
         if ((v) < 0 || (v) >= NUM_VERTICES(g)) { \
-            return PRTE_ERR_BAD_PARAM;           \
+            return PMIX_ERR_BAD_PARAM;           \
         }                                        \
     } while (0)
 

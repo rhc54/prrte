@@ -74,7 +74,7 @@ int prte_mca_base_select(const char *type_name, int output_id, pmix_list_t *comp
                             component->mca_component_name);
 
         rc = component->mca_query_component(&module, &priority);
-        if (PRTE_ERR_FATAL == rc) {
+        if (PMIX_ERR_FATAL == rc) {
             /* a fatal error was detected by this component - e.g., the
              * user specified a required element and the component could
              * not find it. In this case, we must not continue as we might
@@ -126,7 +126,7 @@ int prte_mca_base_select(const char *type_name, int output_id, pmix_list_t *comp
          */
         prte_mca_base_components_close(0, /* Pass 0 to keep this from closing the output handle */
                                        components_available, NULL);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,

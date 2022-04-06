@@ -97,7 +97,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (daemons_per_node <= 0) {
             prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n",
                         daemons_per_node);
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            jdata->exit_code = PMIX_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -108,7 +108,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (daemons_per_node > 0) {
             prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
                            "PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            jdata->exit_code = PMIX_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -117,7 +117,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (daemons_per_proc <= 0) {
             prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u <= 0\n",
                         daemons_per_proc);
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            jdata->exit_code = PMIX_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -127,7 +127,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     if (colocate_daemons) {
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc, PMIX_PROC)) {
             prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            jdata->exit_code = PMIX_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -140,7 +140,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         target_jdata = prte_get_job_data_object(target_proc->nspace);
         if (NULL == target_jdata) {
             prte_output(0, "Unable to find app job %s\n", target_proc->nspace);
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            jdata->exit_code = PMIX_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -202,7 +202,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 for (int pr = 0; pr < daemons_per_node; ++pr) {
                     // Note: Assume only 1 app context for the daemons (0 == app->idx)
                     if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
-                        jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
+                        jdata->exit_code = PMIX_ERR_OUT_OF_RESOURCE;
                         PRTE_ERROR_LOG(jdata->exit_code);
                         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                         goto cleanup;
@@ -229,7 +229,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     for (int pr = 0; pr < daemons_per_proc; ++pr) {
                         // Note: Assume only 1 app context for the daemons (0 == app->idx)
                         if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
-                            jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
+                            jdata->exit_code = PMIX_ERR_OUT_OF_RESOURCE;
                             PRTE_ERROR_LOG(jdata->exit_code);
                             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                             goto cleanup;
@@ -348,8 +348,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* get the ppn */
             if (NULL == (p = strchr(tmp, ':'))) {
                 /* should never happen */
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                jdata->exit_code = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                jdata->exit_code = PMIX_ERR_BAD_PARAM;
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
@@ -360,8 +360,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* get the ppn */
             if (NULL == (p = strchr(tmp, ':'))) {
                 /* should never happen */
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                jdata->exit_code = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                jdata->exit_code = PMIX_ERR_BAD_PARAM;
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
@@ -372,8 +372,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* get the ppn */
             if (NULL == (p = strchr(tmp, ':'))) {
                 /* should never happen */
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                jdata->exit_code = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                jdata->exit_code = PMIX_ERR_BAD_PARAM;
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
@@ -575,9 +575,9 @@ ranking:
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         prte_topology_t *t0;
         if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0))) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             PMIX_RELEASE(caddy);
-            jdata->exit_code = PRTE_ERR_NOT_FOUND;
+            jdata->exit_code = PMIX_ERR_NOT_FOUND;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
@@ -610,7 +610,7 @@ ranking:
         PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {
             if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata))
-                || PRTE_ERR_RESOURCE_BUSY == rc) {
+                || PMIX_ERR_RESOURCE_BUSY == rc) {
                 did_map = true;
                 break;
             }
@@ -625,7 +625,7 @@ ranking:
         }
     }
 
-    if (did_map && PRTE_ERR_RESOURCE_BUSY == rc) {
+    if (did_map && PMIX_ERR_RESOURCE_BUSY == rc) {
         /* the map was done but nothing could be mapped
          * for launch as all the resources were busy
          */

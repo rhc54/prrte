@@ -508,7 +508,7 @@ addlocal:
      */
     node = PMIX_NEW(prte_node_t);
     if (NULL == node) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         PMIX_DESTRUCT(&nodes);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PMIX_RELEASE(caddy);

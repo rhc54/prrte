@@ -115,19 +115,19 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
     if (ret < 0) {
         opts->usepty = 0;
         if (pipe(opts->p_stdout) < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-            return PRTE_ERR_SYS_LIMITS_PIPES;
+            PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+            return PMIX_ERR_SYS_LIMITS_PIPES;
         }
     }
     if (opts->connect_stdin) {
         if (pipe(opts->p_stdin) < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-            return PRTE_ERR_SYS_LIMITS_PIPES;
+            PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+            return PMIX_ERR_SYS_LIMITS_PIPES;
         }
     }
     if (pipe(opts->p_stderr) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-        return PRTE_ERR_SYS_LIMITS_PIPES;
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+        return PMIX_ERR_SYS_LIMITS_PIPES;
     }
     return PRTE_SUCCESS;
 }
@@ -148,7 +148,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         /* disable echo */
         struct termios term_attrs;
         if (tcgetattr(opts->p_stdout[1], &term_attrs) < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         term_attrs.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHOCTL | ECHOKE | ECHONL);
         term_attrs.c_iflag &= ~(ICRNL | INLCR | ISTRIP | INPCK | IXON);
@@ -160,18 +160,18 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
 #endif
             ONLCR);
         if (tcsetattr(opts->p_stdout[1], TCSANOW, &term_attrs) == -1) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         ret = dup2(opts->p_stdout[1], fileno(stdout));
         if (ret < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         close(opts->p_stdout[1]);
     } else {
         if (opts->p_stdout[1] != fileno(stdout)) {
             ret = dup2(opts->p_stdout[1], fileno(stdout));
             if (ret < 0) {
-                return PRTE_ERR_PIPE_SETUP_FAILURE;
+                return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
             close(opts->p_stdout[1]);
         }
@@ -180,7 +180,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         if (opts->p_stdin[0] != fileno(stdin)) {
             ret = dup2(opts->p_stdin[0], fileno(stdin));
             if (ret < 0) {
-                return PRTE_ERR_PIPE_SETUP_FAILURE;
+                return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
             close(opts->p_stdin[0]);
         }
@@ -198,7 +198,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
     if (opts->p_stderr[1] != fileno(stderr)) {
         ret = dup2(opts->p_stderr[1], fileno(stderr));
         if (ret < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         close(opts->p_stderr[1]);
     }

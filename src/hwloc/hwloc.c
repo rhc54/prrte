@@ -235,7 +235,7 @@ int prte_hwloc_base_register(void)
             } else {
                 prte_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
                                default_cpu_list, ptr);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
         } else {
             prte_hwloc_default_cpu_list = strdup(default_cpu_list);
@@ -663,7 +663,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
                 pmix_argv_free(quals);
                 free(myspec);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
         }
         pmix_argv_free(quals);
@@ -691,7 +691,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
                            spec);
             free(myspec);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
     free(myspec);
@@ -700,8 +700,8 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         prte_hwloc_default_binding_policy = tmp;
     } else {
         if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            return PMIX_ERR_BAD_PARAM;
         }
         jdata->map->binding = tmp;
     }

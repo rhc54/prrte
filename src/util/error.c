@@ -53,85 +53,85 @@ const char *prte_strerror(int errnum)
     case PRTE_ERROR:
         retval = "Error";
         break;
-    case PRTE_ERR_OUT_OF_RESOURCE:
+    case PMIX_ERR_OUT_OF_RESOURCE:
         retval = "Out of resource";
         break;
     case PRTE_ERR_TEMP_OUT_OF_RESOURCE:
         retval = "Temporarily out of resource";
         break;
-    case PRTE_ERR_RESOURCE_BUSY:
+    case PMIX_ERR_RESOURCE_BUSY:
         retval = "Resource busy";
         break;
-    case PRTE_ERR_BAD_PARAM:
+    case PMIX_ERR_BAD_PARAM:
         retval = "Bad parameter";
         break;
-    case PRTE_ERR_FATAL:
+    case PMIX_ERR_FATAL:
         retval = "Fatal";
         break;
-    case PRTE_ERR_NOT_IMPLEMENTED:
+    case PMIX_ERR_NOT_IMPLEMENTED:
         retval = "Not implemented";
         break;
-    case PRTE_ERR_NOT_SUPPORTED:
+    case PMIX_ERR_NOT_SUPPORTED:
         retval = "Not supported";
         break;
     case PRTE_ERR_INTERRUPTED:
         retval = "Interrupted";
         break;
-    case PRTE_ERR_WOULD_BLOCK:
+    case PMIX_ERR_WOULD_BLOCK:
         retval = "Would block";
         break;
-    case PRTE_ERR_IN_ERRNO:
+    case PMIX_ERR_IN_ERRNO:
         retval = "In errno";
         break;
-    case PRTE_ERR_UNREACH:
+    case PMIX_ERR_UNREACH:
         retval = "Unreachable";
         break;
-    case PRTE_ERR_NOT_FOUND:
+    case PMIX_ERR_NOT_FOUND:
         retval = "Not found";
         break;
-    case PRTE_EXISTS:
+    case PMIX_EXISTS:
         retval = "Exists";
         break;
-    case PRTE_ERR_TIMEOUT:
+    case PMIX_ERR_TIMEOUT:
         retval = "Timeout";
         break;
-    case PRTE_ERR_NOT_AVAILABLE:
+    case PMIX_ERR_NOT_AVAILABLE:
         retval = "Not available";
         break;
-    case PRTE_ERR_PERM:
+    case PMIX_ERR_NO_PERMISSIONS:
         retval = "No permission";
         break;
-    case PRTE_ERR_VALUE_OUT_OF_BOUNDS:
+    case PMIX_ERR_VALUE_OUT_OF_BOUNDS:
         retval = "Value out of bounds";
         break;
-    case PRTE_ERR_FILE_READ_FAILURE:
+    case PMIX_ERR_FILE_READ_FAILURE:
         retval = "File read failure";
         break;
-    case PRTE_ERR_FILE_WRITE_FAILURE:
+    case PMIX_ERR_FILE_WRITE_FAILURE:
         retval = "File write failure";
         break;
-    case PRTE_ERR_FILE_OPEN_FAILURE:
+    case PMIX_ERR_FILE_OPEN_FAILURE:
         retval = "File open failure";
         break;
-    case PRTE_ERR_PACK_MISMATCH:
+    case PMIX_ERR_PACK_MISMATCH:
         retval = "Pack data mismatch";
         break;
-    case PRTE_ERR_PACK_FAILURE:
+    case PMIX_ERR_PACK_FAILURE:
         retval = "Data pack failed";
         break;
-    case PRTE_ERR_UNPACK_FAILURE:
+    case PMIX_ERR_UNPACK_FAILURE:
         retval = "Data unpack failed";
         break;
-    case PRTE_ERR_UNPACK_INADEQUATE_SPACE:
+    case PMIX_ERR_UNPACK_INADEQUATE_SPACE:
         retval = "Data unpack had inadequate space";
         break;
-    case PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
+    case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
         retval = "Data unpack would read past end of buffer";
         break;
     case PRTE_ERR_OPERATION_UNSUPPORTED:
         retval = "Requested operation is not supported on referenced data type";
         break;
-    case PRTE_ERR_UNKNOWN_DATA_TYPE:
+    case PMIX_ERR_UNKNOWN_DATA_TYPE:
         retval = "Unknown data type";
         break;
     case PRTE_ERR_BUFFER:
@@ -263,7 +263,7 @@ const char *prte_strerror(int errnum)
     case PRTE_ERR_CONNECTION_REFUSED:
         retval = "Connection refused";
         break;
-    case PRTE_ERR_TYPE_MISMATCH:
+    case PMIX_ERR_TYPE_MISMATCH:
         retval = "Type mismatch";
         break;
     case PRTE_ERR_COMPARE_FAILURE:
@@ -299,22 +299,22 @@ const char *prte_strerror(int errnum)
         retval = "A message is attempting to be sent to a process whose contact information is "
                  "unknown";
         break;
-    case PRTE_ERR_SYS_LIMITS_PIPES:
+    case PMIX_ERR_SYS_LIMITS_PIPES:
         retval = "The system limit on number of pipes a process can open was reached";
         break;
-    case PRTE_ERR_PIPE_SETUP_FAILURE:
+    case PMIX_ERR_PIPE_SETUP_FAILURE:
         retval = "A pipe could not be setup between a daemon and one of its local processes";
         break;
-    case PRTE_ERR_SYS_LIMITS_CHILDREN:
+    case PMIX_ERR_SYS_LIMITS_CHILDREN:
         retval = "The system limit on number of children a process can have was reached";
         break;
     case PRTE_ERR_FAILED_GET_TERM_ATTRS:
         retval = "The I/O forwarding system was unable to get the attributes of your terminal";
         break;
-    case PRTE_ERR_WDIR_NOT_FOUND:
+    case PMIX_ERR_JOB_WDIR_NOT_FOUND:
         retval = "The specified working directory could not be found";
         break;
-    case PRTE_ERR_EXE_NOT_FOUND:
+    case PMIX_ERR_JOB_EXE_NOT_FOUND:
         retval = "The specified executable could not be found";
         break;
     case PRTE_ERR_PIPE_READ_FAILURE:

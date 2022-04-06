@@ -108,7 +108,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                 ++(jdata->map->num_nodes);
             }
             if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
             prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
@@ -214,7 +214,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                             num_procs_to_assign, node->name);
         for (i = 0; i < num_procs_to_assign && nprocs_mapped < app->num_procs; i++) {
             if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
             prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
@@ -454,7 +454,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                                  node->name, num_procs_to_assign));
             for (j = 0; j < num_procs_to_assign && nprocs_mapped < app->num_procs; j++) {
                 if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
-                    return PRTE_ERR_OUT_OF_RESOURCE;
+                    return PMIX_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
@@ -521,7 +521,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                                  "%s ADDING PROC TO NODE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  node->name));
             if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             made_progress = true;
             nprocs_mapped++;
@@ -702,8 +702,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
             root = hwloc_get_root_obj(node->topology->topo);
             if (NULL == root->userdata) {
                 /* incorrect */
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                return PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                return PMIX_ERR_BAD_PARAM;
             }
             rdata = (prte_hwloc_topo_data_t *) root->userdata;
             available = hwloc_bitmap_dup(rdata->available);
@@ -739,12 +739,12 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
                                                           cache_level, (i + start) % nobjs);
                     if (NULL == obj) {
-                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
                             free(job_cpuset);
                         }
-                        return PRTE_ERR_NOT_FOUND;
+                        return PMIX_ERR_NOT_FOUND;
                     }
                     npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
                                                     available, obj);
@@ -767,7 +767,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
                         if (NULL != job_cpuset) {
                             free(job_cpuset);
                         }
-                        return PRTE_ERR_OUT_OF_RESOURCE;
+                        return PMIX_ERR_OUT_OF_RESOURCE;
                     }
                     nprocs_mapped++;
                     nmapped++;
@@ -845,7 +845,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
 
     if (nprocs_mapped < app->num_procs) {
         /* usually means there were no objects of the requested type */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     return PRTE_SUCCESS;
@@ -897,7 +897,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
     }
 
     if (0 == nobjs) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* see if this job has a "soft" cgroup assignment */
@@ -951,11 +951,11 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
         root = hwloc_get_root_obj(node->topology->topo);
         if (NULL == root->userdata) {
             /* incorrect */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             if (NULL != job_cpuset) {
                 free(job_cpuset);
             }
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
         rdata = (prte_hwloc_topo_data_t *) root->userdata;
         available = hwloc_bitmap_dup(rdata->available);
@@ -975,12 +975,12 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
             /* get the hwloc object */
             obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i);
             if (NULL == obj) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {
                     free(job_cpuset);
                 }
-                return PRTE_ERR_NOT_FOUND;
+                return PMIX_ERR_NOT_FOUND;
             }
             npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available, obj);
             if (cpus_per_rank > npus) {
@@ -1005,7 +1005,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
             /* map the reqd number of procs */
             for (j = 0; j < nprocs && nprocs_mapped < app->num_procs; j++) {
                 if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
-                    return PRTE_ERR_OUT_OF_RESOURCE;
+                    return PMIX_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,

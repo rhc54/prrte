@@ -171,7 +171,7 @@ static int rte_init(int argc, char **argv)
     }
     if (PRTE_SUCCESS != (ret = prte_plm_base_select())) {
         error = "prte_plm_base_select";
-        if (PRTE_ERR_FATAL == ret) {
+        if (PMIX_ERR_FATAL == ret) {
             /* we already output a show_help - so keep down the verbage */
             ret = PRTE_ERR_SILENT;
         }
@@ -500,7 +500,7 @@ static int rte_init(int argc, char **argv)
         /* save my contact info in a file for others to find */
         if (NULL == prte_process_info.jobfam_session_dir) {
             /* has to be set here! */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             goto error;
         }
     }

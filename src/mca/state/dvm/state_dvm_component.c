@@ -82,5 +82,5 @@ static int state_dvm_component_query(prte_mca_base_module_t **module, int *prior
 
     *priority = 0;
     *module = NULL;
-    return PRTE_ERR_NOT_AVAILABLE;
+    return PMIX_ERR_NOT_AVAILABLE;
 }

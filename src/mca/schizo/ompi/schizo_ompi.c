@@ -394,7 +394,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         } else if (0 == strcmp(opt->key, "with-ft")) {
             if (NULL == opt->values || NULL == opt->values[0]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             p1 = opt->values[0];
             if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
@@ -417,7 +417,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                 }
                 else {
                     prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
-                    return PRTE_ERR_FATAL;
+                    return PMIX_ERR_FATAL;
                 }
             }
 #endif
@@ -808,7 +808,7 @@ static int check_cache_noadd(char ***c1, char ***c2, char *p1, char *p2)
                     /* this is an error */
                     prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                    cachevals[k]);
-                    return PRTE_ERR_BAD_PARAM;
+                    return PMIX_ERR_BAD_PARAM;
                 }
             }
         }
@@ -860,7 +860,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                     if (NULL == p2) {
                         free(p1);
                         free(value);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                     *p2 = '\0';
                     ++p2;
@@ -886,7 +886,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                 }
                 if (!found) {
                     prte_show_help("help-schizo-base.txt", "env-not-found", true, p1);
-                    rc = PRTE_ERR_NOT_FOUND;
+                    rc = PMIX_ERR_NOT_FOUND;
                 }
             }
         }
@@ -904,14 +904,14 @@ static int process_token(char *token, char ***cache, char ***cachevals)
     if (NULL == (ptr = strchr(token, '='))) {
         value = getenv(token);
         if (NULL == value) {
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
 
         /* duplicate the value to silence tainted string coverity issue */
         value = strdup(value);
         if (NULL == value) {
             /* out of memory */
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         if (NULL != (ptr = strchr(value, '='))) {
@@ -943,7 +943,7 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
     for (int i = 0; NULL != tokens[i]; ++i) {
         rc = process_token(tokens[i], xparams, xvals);
         if (PRTE_SUCCESS != rc) {
-            if (PRTE_ERR_NOT_FOUND == rc) {
+            if (PMIX_ERR_NOT_FOUND == rc) {
                 prte_show_help("help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
                                env_list);
             }
@@ -986,7 +986,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     pmix_argv_free(xparams);
                     pmix_argv_free(xvals);
                     free(p1);
-                    return PRTE_ERR_NOT_FOUND;
+                    return PMIX_ERR_NOT_FOUND;
                 }
                 free(p1);
             } else {
@@ -996,7 +996,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 pmix_argv_free(cachevals);
                 pmix_argv_free(xparams);
                 pmix_argv_free(xvals);
-                return PRTE_ERR_NOT_FOUND;
+                return PMIX_ERR_NOT_FOUND;
             }
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
@@ -1013,7 +1013,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 pmix_argv_free(xparams);
                 pmix_argv_free(xvals);
                 fclose(fp);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             for (n = 0; NULL != opts[n]; n++) {
                 if ('\0' == opts[n][0] || '#' == opts[n][0]) {
@@ -1033,7 +1033,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);
                         fclose(fp);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                     p1 = prte_schizo_base_strip_quotes(opts[n + 1]);
                     /* some idiot decided to allow spaces around an "=" sign, which is
@@ -1051,7 +1051,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             pmix_argv_free(xparams);
                             pmix_argv_free(xvals);
                             fclose(fp);
-                            return PRTE_ERR_BAD_PARAM;
+                            return PMIX_ERR_BAD_PARAM;
                         }
                         p2 = prte_schizo_base_strip_quotes(opts[n + 3]);
                         pmix_asprintf(&param, "%s=%s", p1, p2);
@@ -1086,7 +1086,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);
                         fclose(fp);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                     p1 = prte_schizo_base_strip_quotes(opts[n + 1]);
                     p2 = prte_schizo_base_strip_quotes(opts[n + 2]);
@@ -1125,7 +1125,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);
                         fclose(fp);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                     ++p1;
                     rc = process_env_list(p1, &xparams, &xvals, ';');

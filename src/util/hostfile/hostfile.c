@@ -438,7 +438,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
             } else {
                 prte_show_help("help-hostfile.txt", "max_slots_lt", true, cur_hostfile_name,
                                node->slots, rc);
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
                 pmix_list_remove_item(updates, &node->super);
                 PMIX_RELEASE(node);
                 return PRTE_ERROR;
@@ -457,7 +457,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
             return PRTE_ERROR;
         }
         if (number_of_slots > node->slots) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
             pmix_list_remove_item(updates, &node->super);
             PMIX_RELEASE(node);
             return PRTE_ERROR;
@@ -501,7 +501,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
          */
         if (prte_default_hostfile_given) {
             prte_show_help("help-hostfile.txt", "no-hostfile", true, hostfile);
-            rc = PRTE_ERR_NOT_FOUND;
+            rc = PMIX_ERR_NOT_FOUND;
             goto unlock;
         }
         /* otherwise, not finding it is okay */

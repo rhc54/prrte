@@ -161,7 +161,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
             tv = &wev->tv;                                             \
         }                                                              \
         if (prte_event_add(wev->ev, tv)) {                             \
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);                        \
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);                        \
         }                                                              \
     } while (0);
 
@@ -198,7 +198,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
             tv = &rev->tv;                      \
         }                                       \
         if (prte_event_add(rev->ev, tv)) {      \
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM); \
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM); \
         }                                       \
     } while (0);
 

@@ -194,7 +194,7 @@ process:
         /* specified seq file trumps all */
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
             if (NULL == hosts) {
-                rc = PRTE_ERR_NOT_FOUND;
+                rc = PMIX_ERR_NOT_FOUND;
                 goto error;
             }
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -231,7 +231,7 @@ process:
         } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
                                       PMIX_STRING)) {
             if (NULL == hosts) {
-                rc = PRTE_ERR_NOT_FOUND;
+                rc = PMIX_ERR_NOT_FOUND;
                 goto error;
             }
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -399,7 +399,7 @@ process:
                     bitmap = hwloc_bitmap_alloc();
                     /* parse the slot_list to find the package and core */
                     rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, bitmap);
-                    if (PRTE_ERR_NOT_FOUND == rc) {
+                    if (PMIX_ERR_NOT_FOUND == rc) {
                         char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                              false, node->topology->topo);
                         prte_show_help("help-rmaps-seq.txt", "missing-cpu", true,
@@ -510,8 +510,8 @@ static int process_file(char *path, pmix_list_t *list)
     /* open the file */
     fp = fopen(path, "r");
     if (NULL == fp) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     while (NULL != (hstname = prte_getline(fp))) {
         if (0 == strlen(hstname)) {

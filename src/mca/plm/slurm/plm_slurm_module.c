@@ -221,8 +221,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -591,9 +591,9 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
 
     srun_pid = fork();
     if (-1 == srun_pid) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
         free(exec_argv);
-        return PRTE_ERR_SYS_LIMITS_CHILDREN;
+        return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
     /* if this is the primary launch - i.e., not a comm_spawn of a
      * child job - then save the pid

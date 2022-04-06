@@ -419,8 +419,8 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
             (1, prte_pmix_verbose_output, "%s[%s:%d] MODEX RECV FOR PROC %s KEY %s",               \
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__, PRTE_NAME_PRINT((p)), _key)); \
         if (NULL == _key) {                                                                        \
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);                                              \
-            (r) = PRTE_ERR_OUT_OF_RESOURCE;                                                        \
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);                                              \
+            (r) = PMIX_ERR_OUT_OF_RESOURCE;                                                        \
         } else {                                                                                   \
             PRTE_MODEX_RECV_STRING((r), _key, (p), (d), (sz));                                     \
             free(_key);                                                                            \

@@ -69,7 +69,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /* get the list of allocated nodes */
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
         prte_show_help("help-ras-lsf.txt", "nodelist-failed", true);
-        return PRTE_ERR_NOT_AVAILABLE;
+        return PMIX_ERR_NOT_AVAILABLE;
     }
 
     node = NULL;

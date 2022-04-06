@@ -110,7 +110,7 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
             /* we have run out of jobids! */
             prte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are "
                            "out of jobids!");
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 

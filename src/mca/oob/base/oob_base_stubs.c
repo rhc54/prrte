@@ -305,7 +305,7 @@ static void process_uri(char *uri)
          * the first containing the process name of our peer
          * and all others containing the OOB contact info
          */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         return;
     }
     *cptr = '\0';

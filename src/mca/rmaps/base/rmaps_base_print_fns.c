@@ -112,7 +112,7 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
 
     ptr = get_print_buffer();
     if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return prte_rmaps_print_null;
     }
     /* cycle around the ring */

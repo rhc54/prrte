@@ -511,7 +511,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         /* remove the session directory tree */
         if (0 > pmix_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir,
                               PRTE_LOCAL_JOBID(jdata->nspace))) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
+            ret = PMIX_ERR_OUT_OF_RESOURCE;
             goto CLEANUP;
         }
         pmix_os_dirpath_destroy(cmd_str, true, NULL);
@@ -707,7 +707,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         break;
 
     default:
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
     }
 
 CLEANUP:

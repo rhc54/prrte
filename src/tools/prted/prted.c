@@ -370,7 +370,7 @@ int main(int argc, char *argv[])
                     /* the message will now come out locally */
                     prte_show_help("help-prted.txt", "orted:cannot-bind", true,
                                    prte_process_info.nodename, prte_daemon_cores);
-                    ret = PRTE_ERR_NOT_SUPPORTED;
+                    ret = PMIX_ERR_NOT_SUPPORTED;
                     hwloc_bitmap_free(ours);
                     hwloc_bitmap_free(res);
                     goto DONE;
@@ -690,7 +690,7 @@ int main(int argc, char *argv[])
     PRTE_PMIX_CONSTRUCT_LOCK(&xfer.lock);
     if (PMIX_SUCCESS != (prc = PMIx_server_collect_inventory(NULL, 0, infocbfunc, &xfer))) {
         PMIX_ERROR_LOG(prc);
-        ret = PRTE_ERR_NOT_SUPPORTED;
+        ret = PMIX_ERR_NOT_SUPPORTED;
         goto DONE;
     }
     PRTE_PMIX_WAIT_THREAD(&xfer.lock);

@@ -83,7 +83,7 @@ static int info_register_framework(prte_mca_base_framework_t *framework,
     int rc;
 
     rc = prte_mca_base_framework_register(framework, PRTE_MCA_BASE_REGISTER_ALL);
-    if (PRTE_SUCCESS != rc && PRTE_ERR_BAD_PARAM != rc) {
+    if (PRTE_SUCCESS != rc && PMIX_ERR_BAD_PARAM != rc) {
         return rc;
     }
 
@@ -106,14 +106,14 @@ static int register_project_frameworks(const char *project_name,
 
     for (i = 0; NULL != frameworks[i]; i++) {
         if (PRTE_SUCCESS != (rc = info_register_framework(frameworks[i], component_map))) {
-            if (PRTE_ERR_BAD_PARAM == rc) {
+            if (PMIX_ERR_BAD_PARAM == rc) {
                 fprintf(stderr,
                         "\nA \"bad parameter\" error was encountered when opening the %s %s "
                         "framework\n",
                         project_name, frameworks[i]->framework_name);
                 fprintf(stderr, "The output received from that framework includes the following "
                                 "parameters:\n\n");
-            } else if (PRTE_ERR_NOT_AVAILABLE != rc) {
+            } else if (PMIX_ERR_NOT_AVAILABLE != rc) {
                 fprintf(stderr, "%s_info_register: %s failed\n", project_name,
                         frameworks[i]->framework_name);
                 rc = PRTE_ERROR;

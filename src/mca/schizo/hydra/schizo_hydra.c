@@ -385,7 +385,7 @@ static int define_cli(prte_cmd_line_t *cli)
 
     /* protect against bozo error */
     if (NULL == cli) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     rc = prte_cmd_line_add(cli, hydra_cmd_line_init);

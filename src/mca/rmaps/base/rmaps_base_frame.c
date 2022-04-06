@@ -442,7 +442,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
         } else {
             /* unrecognized modifier */
             pmix_argv_free(ck2);
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
     pmix_argv_free(ck2);
@@ -533,9 +533,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 free(spec);
                 return PRTE_ERR_SILENT;
             } else if (NULL == jdata->map) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
                 free(spec);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             /* at this point, ck points to a string that contains at least
              * two fields (specifying the #procs/obj and the object we are
@@ -578,7 +578,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, &tmp))
             && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            if (PRTE_ERR_BAD_PARAM == rc) {
+            if (PMIX_ERR_BAD_PARAM == rc) {
                 prte_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
             }
             if (NULL != spec) {
@@ -623,7 +623,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
                 prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
                 free(spec);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             /* if they asked for rankfile and didn't specify one, but did
              * provide one via MCA param, then use it */
@@ -633,7 +633,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                         /* also not allowed */
                         prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
                         free(spec);
-                        return PRTE_ERR_BAD_PARAM;
+                        return PMIX_ERR_BAD_PARAM;
                     }
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
                                        prte_rmaps_base.file, PMIX_STRING);
@@ -682,8 +682,8 @@ setpolicy:
         prte_rmaps_base.mapping = tmp;
     } else {
         if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            return PMIX_ERR_BAD_PARAM;
         }
         jdata->map->mapping = tmp;
     }
@@ -712,8 +712,8 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
     if (NULL == spec) {
         if (NULL != jdata) {
             if (NULL == jdata->map) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                return PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                return PMIX_ERR_BAD_PARAM;
             }
             mapping = jdata->map->mapping;
         } else {
@@ -819,8 +819,8 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
         prte_rmaps_base.ranking = tmp;
     } else {
         if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            return PMIX_ERR_BAD_PARAM;
         }
         jdata->map->ranking = tmp;
     }

@@ -61,7 +61,7 @@ typedef int (*prte_mca_base_var_enum_get_value_fn_t)(prte_mca_base_var_enum_t *s
  * @param[out] value integer value for the string
  *
  * @retval PRTE_SUCCESS if found
- * @retval PRTE_ERR_VALUE_OUT_OF_BOUNDS if not
+ * @retval PMIX_ERR_VALUE_OUT_OF_BOUNDS if not
  */
 typedef int (*prte_mca_base_var_enum_vfs_fn_t)(prte_mca_base_var_enum_t *self,
                                                const char *string_value, int *value);
@@ -85,7 +85,7 @@ typedef int (*prte_mca_base_var_enum_dump_fn_t)(prte_mca_base_var_enum_t *self, 
  * @param[out] string_value string value for value
  *
  * @retval PRTE_SUCCESS on success
- * @retval PRTE_ERR_VALUE_OUT_OF_BOUNDS if not found
+ * @retval PMIX_ERR_VALUE_OUT_OF_BOUNDS if not found
  *
  * @long This function returns the string value for a given interger value in the
  * {string_value} parameter. The {string_value} parameter may be NULL in which case
@@ -127,10 +127,10 @@ struct prte_mca_base_var_enum_t {
         override the default function */
     prte_mca_base_var_enum_get_value_fn_t get_value;
     /** Given a string return corresponding integer value. If the string does not match a
-     valid value return PRTE_ERR_VALUE_OUT_OF_BOUNDS */
+     valid value return PMIX_ERR_VALUE_OUT_OF_BOUNDS */
     prte_mca_base_var_enum_vfs_fn_t value_from_string;
     /** Given an integer return the corresponding string value. If the integer does not
-        match a valid value return PRTE_ERR_VALUE_OUT_OF_BOUNDS */
+        match a valid value return PMIX_ERR_VALUE_OUT_OF_BOUNDS */
     prte_mca_base_var_enum_sfv_fn_t string_from_value;
     /** Dump a textual representation of the enumerator. The caller is responsible for
         freeing the string */

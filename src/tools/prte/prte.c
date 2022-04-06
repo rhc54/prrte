@@ -484,7 +484,7 @@ int main(int argc, char *argv[])
          * the cmd line to get it */
         rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts);
         // not-found => no app given
-        if (PRTE_SUCCESS != rc && PRTE_ERR_NOT_FOUND != rc) {
+        if (PRTE_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
             PRTE_UPDATE_EXIT_STATUS(rc);
             goto DONE;
         }
@@ -520,7 +520,7 @@ int main(int argc, char *argv[])
     ret = PMIx_Get(NULL, PMIX_PROCID, NULL, 0, &val);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         goto DONE;
     }
     memcpy(&myproc, val->data.proc, sizeof(pmix_proc_t));
@@ -534,14 +534,14 @@ int main(int argc, char *argv[])
         param = NULL;
     }
     if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         goto DONE;
     }
     if (0 < (i = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * i);
         if (NULL == forward_signals_events) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            ret = PMIX_ERR_OUT_OF_RESOURCE;
+            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
             goto DONE;
         }
         i = 0;
@@ -557,7 +557,7 @@ int main(int argc, char *argv[])
     if (NULL != prte_pmix_server_globals.singleton) {
         rc = prep_singleton(prte_pmix_server_globals.singleton);
         if (PRTE_SUCCESS != ret) {
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
             goto DONE;
         }
     }
@@ -592,13 +592,13 @@ int main(int argc, char *argv[])
     /* get the daemon job object - was created by ess/hnp component */
     if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
         prte_show_help("help-prun.txt", "bad-job-object", true, prte_tool_basename);
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         goto DONE;
     }
     /* ess/hnp also should have created a daemon "app" */
     if (NULL == (dapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0))) {
         prte_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         goto DONE;
     }
 
@@ -627,7 +627,7 @@ int main(int argc, char *argv[])
             if (0 == param_len) {
                 prte_show_help("help-prun.txt", "prun:empty-prefix", true, prte_tool_basename,
                                prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
                 goto DONE;
             }
         }
@@ -736,7 +736,7 @@ int main(int argc, char *argv[])
 
     /* check if something went wrong with setting up the dvm, bail out */
     if (!prte_dvm_ready) {
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         goto DONE;
     }
 
@@ -877,13 +877,13 @@ int main(int argc, char *argv[])
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_DIR, strlen(targv[idx]))) {
                     if (NULL != outfile) {
                         prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     if (NULL == ptr) {
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "directory", "directory");
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     /* If the given filename isn't an absolute path, then
                      * convert it to one so the name will be relative to
@@ -892,7 +892,7 @@ int main(int argc, char *argv[])
                     if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
                             goto DONE;
                         }
                         outdir = pmix_os_path(false, cwd, ptr, NULL);
@@ -903,13 +903,13 @@ int main(int argc, char *argv[])
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_FILE, strlen(targv[idx]))) {
                     if (NULL != outdir) {
                         prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     if (NULL == ptr) {
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "filename", "filename");
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     /* If the given filename isn't an absolute path, then
                      * convert it to one so the name will be relative to
@@ -918,7 +918,7 @@ int main(int argc, char *argv[])
                     if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
                             goto DONE;
                         }
                         outfile = pmix_os_path(false, cwd, ptr, NULL);
@@ -1339,9 +1339,9 @@ static int prep_singleton(const char *name)
     free(ptr);
     rc = prte_set_job_data_object(jdata);
     if (PRTE_SUCCESS != rc) {
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_UPDATE_EXIT_STATUS(PMIX_ERR_FATAL);
         PMIX_RELEASE(jdata);
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
     /* must have an app */
     app = PMIX_NEW(prte_app_context_t);

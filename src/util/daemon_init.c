@@ -16,7 +16,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,6 +36,7 @@
 #include <stdlib.h>
 
 #include "constants.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/daemon_init.h"
 
 int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
@@ -62,14 +63,14 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 
     if (NULL != working_dir) {
         if (-1 == chdir(working_dir)) { /* change working directory */
-            return PRTE_ERR_FATAL;
+            return PMIX_ERR_FATAL;
         }
     }
 
     /* connect input to /dev/null */
     fd = open("/dev/null", O_RDONLY);
     if (0 > fd) {
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
     dup2(fd, STDIN_FILENO);
     if (fd != STDIN_FILENO) {
@@ -91,12 +92,12 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
             close(fd);
         }
     } else {
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
 
     return PRTE_SUCCESS;
 
 #else /* HAVE_FORK */
-    return PRTE_ERR_NOT_SUPPORTED;
+    return PMIX_ERR_NOT_SUPPORTED;
 #endif
 }

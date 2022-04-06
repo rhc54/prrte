@@ -204,7 +204,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 
     /* check for the tracker and create it if not found */
     if (NULL == (coll = prte_grpcomm_base_get_tracker(&sig, true))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         PMIX_PROC_FREE(sig.signature, sig.sz);
         return;
     }

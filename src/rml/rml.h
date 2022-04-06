@@ -66,7 +66,7 @@ BEGIN_C_DECLS
  * @param[in] cbdata User data to provide during completion callback
  *
  * @retval PRTE_SUCCESS The message was successfully started
- * @retval PRTE_ERR_BAD_PARAM One of the parameters was invalid
+ * @retval PMIX_ERR_BAD_PARAM One of the parameters was invalid
  * @retval PRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
  *                    receiving process is not available
  * @retval PRTE_ERROR  An unspecified error occurred

@@ -57,8 +57,8 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
     /* create the prte_job_t object */
     jptr = PMIX_NEW(prte_job_t);
     if (NULL == jptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* unpack the nspace */
@@ -299,8 +299,8 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
     /* create the node object */
     node = PMIX_NEW(prte_node_t);
     if (NULL == node) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* unpack the node name */
@@ -388,8 +388,8 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc)
     /* create the prte_proc_t object */
     proc = PMIX_NEW(prte_proc_t);
     if (NULL == proc) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* unpack the name */
@@ -500,8 +500,8 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
     /* create the app_context object */
     app = PMIX_NEW(prte_app_context_t);
     if (NULL == app) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* get the app index number */
@@ -642,8 +642,8 @@ int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
     /* create the prte_rmaps_base_map_t object */
     map = PMIX_NEW(prte_job_map_t);
     if (NULL == map) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* unpack the requested mapper */

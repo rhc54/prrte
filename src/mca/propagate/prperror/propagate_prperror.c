@@ -233,9 +233,9 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
 
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, errorproc->rank);
         if (NULL == node) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
             PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
 
         cnt = node->num_procs; // prte issue, num_procs value is not correct

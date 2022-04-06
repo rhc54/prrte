@@ -322,7 +322,7 @@ static int ppr_mapper(prte_job_t *jdata)
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j = 0; j < rmaps_ppr_global[start] && nprocs_mapped < total_procs; j++) {
                     if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
-                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        rc = PMIX_ERR_OUT_OF_RESOURCE;
                         goto error;
                     }
                     nprocs_mapped++;
@@ -346,7 +346,7 @@ static int ppr_mapper(prte_job_t *jdata)
                     for (i=0; i < num_available && nprocs_mapped < total_procs; i++) {
                         obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, lowest, cache_level, i);
                         if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
-                            rc = PRTE_ERR_OUT_OF_RESOURCE;
+                            rc = PMIX_ERR_OUT_OF_RESOURCE;
                             goto error;
                         }
                         nprocs_mapped++;
@@ -540,7 +540,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
             }
             locale = NULL;
             if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER)) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 return;
             }
             if (hwloc_bitmap_intersects(avail, locale->cpuset)) {
@@ -592,7 +592,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
                     locale = NULL;
                     if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
                                            (void **) &locale, PMIX_POINTER)) {
-                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                         return;
                     }
                     if (hwloc_bitmap_intersects(top->children[k]->cpuset, locale->cpuset)) {
@@ -669,7 +669,7 @@ static int assign_locations(prte_job_t *jdata)
     jobppr = NULL;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING) ||
         NULL == jobppr) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -698,7 +698,7 @@ static int assign_locations(prte_job_t *jdata)
         level = HWLOC_OBJ_L3CACHE;
         cache_level = 3;
     } else {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 

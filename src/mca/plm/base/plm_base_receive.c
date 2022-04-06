@@ -217,7 +217,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         if (NULL == jdata->schizo) {
             prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
             free(tmp);
-            rc = PRTE_ERR_NOT_FOUND;
+            rc = PMIX_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
         }
         free(tmp);
@@ -225,8 +225,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         /* get the name of the actual spawn parent - i.e., the proc that actually
          * requested the spawn */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
         }
 
@@ -415,7 +415,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                     /* get the proc data object */
                     proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
                     if (NULL == proc) {
-                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                         goto CLEANUP;
                     }
@@ -485,7 +485,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 /* get the proc data object */
                 proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
                 if (NULL == proc) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                    PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                     goto CLEANUP;
                 }
@@ -537,8 +537,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(job)));
         /* get the job object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             goto CLEANUP;
         }
         count = 1;
@@ -548,7 +548,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid));
             proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
             if (NULL == proc) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                 goto CLEANUP;
             }
@@ -577,8 +577,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(job)));
         /* get the job object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             goto CLEANUP;
         }
         count = 1;
@@ -588,7 +588,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(vpid)));
             proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
             if (NULL == proc) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                 goto CLEANUP;
             }
@@ -642,8 +642,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         break;
 
     default:
-        PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
-        rc = PRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        PRTE_ERROR_LOG(PMIX_ERR_VALUE_OUT_OF_BOUNDS);
+        rc = PMIX_ERR_VALUE_OUT_OF_BOUNDS;
         break;
     }
 

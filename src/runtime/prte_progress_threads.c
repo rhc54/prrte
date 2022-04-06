@@ -281,7 +281,7 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
         if (0 != rc && prte_bind_progress_thread_reqd) {
             prte_output(0, "Failed to bind progress thread %s",
                         (NULL == trk->name) ? "NULL" : trk->name);
-            rc = PRTE_ERR_NOT_SUPPORTED;
+            rc = PMIX_ERR_NOT_SUPPORTED;
         } else {
             rc = PRTE_SUCCESS;
         }
@@ -317,19 +317,19 @@ prte_event_base_t *prte_progress_thread_init(const char *name)
 
     trk = PMIX_NEW(prte_progress_tracker_t);
     if (NULL == trk) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return NULL;
     }
 
     trk->name = strdup(name);
     if (NULL == trk->name) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         PMIX_RELEASE(trk);
         return NULL;
     }
 
     if (NULL == (trk->ev_base = prte_event_base_create())) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         PMIX_RELEASE(trk);
         return NULL;
     }
@@ -363,7 +363,7 @@ int prte_progress_thread_finalize(const char *name)
 
     if (!inited) {
         /* nothing we can do */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (NULL == name) {
@@ -393,7 +393,7 @@ int prte_progress_thread_finalize(const char *name)
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 /*
@@ -405,7 +405,7 @@ int prte_progress_thread_pause(const char *name)
 
     if (!inited) {
         /* nothing we can do */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (NULL == name) {
@@ -424,7 +424,7 @@ int prte_progress_thread_pause(const char *name)
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 #if PRTE_HAVE_LIBEV
@@ -450,7 +450,7 @@ int prte_progress_thread_resume(const char *name)
 
     if (!inited) {
         /* nothing we can do */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     if (NULL == name) {
@@ -462,12 +462,12 @@ int prte_progress_thread_resume(const char *name)
     {
         if (0 == strcmp(name, trk->name)) {
             if (trk->ev_active) {
-                return PRTE_ERR_RESOURCE_BUSY;
+                return PMIX_ERR_RESOURCE_BUSY;
             }
 
             return start_progress_engine(trk);
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }

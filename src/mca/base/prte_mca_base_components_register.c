@@ -106,8 +106,8 @@ static int register_components(prte_mca_base_framework_t *framework)
         }
 
         if (PRTE_SUCCESS != ret) {
-            if (PRTE_ERR_NOT_AVAILABLE != ret) {
-                /* If the component returns PRTE_ERR_NOT_AVAILABLE,
+            if (PMIX_ERR_NOT_AVAILABLE != ret) {
+                /* If the component returns PMIX_ERR_NOT_AVAILABLE,
                    it's a cue to "silently ignore me" -- it's not a
                    failure, it's just a way for the component to say
                    "nope!".

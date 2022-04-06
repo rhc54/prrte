@@ -96,8 +96,8 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
 
     /* invalid argument */
     if (NULL == val_if_found) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     *val_if_found = NULL;
@@ -127,26 +127,26 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
         }
         if (!(cpq = strchr(cpr, '"'))) { /* Can't find pathname start      */
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-            return PRTE_ERR_FILE_OPEN_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+            return PMIX_ERR_FILE_OPEN_FAILURE;
         }
         if (!(cpr = strchr(++cpq, '"'))) { /* Can't find pathname end        */
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-            return PRTE_ERR_FILE_OPEN_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+            return PMIX_ERR_FILE_OPEN_FAILURE;
         }
         *cpr = '\0';
         if (strlen(cpq) + 8 > PATH_MAX) { /* Bad configuration              */
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-            return PRTE_ERR_FILE_OPEN_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+            return PMIX_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
         pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         free(alps_config_str);
         return PRTE_SUCCESS;
@@ -169,8 +169,8 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
 
     /* invalid argument */
     if (NULL == val_if_found) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     *val_if_found = NULL;
@@ -205,15 +205,15 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
         /* Bad configuration sanity check */
         if (strlen(cpq) + 8 > PATH_MAX) {
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-            return PRTE_ERR_FILE_OPEN_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+            return PMIX_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
         pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         free(alps_config_str);
         return PRTE_SUCCESS;
@@ -307,10 +307,10 @@ static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     if (0 == prte_ras_alps_res_id) {
         prte_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     if (NULL == (appinfo_path = prte_ras_get_appinfo_path())) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
     /* Parse ALPS scheduler information file (appinfo) for node list. */
     if (PRTE_SUCCESS
@@ -349,7 +349,7 @@ static char *ras_alps_getline(FILE *fp)
     input = (char *) calloc(RAS_BASE_FILE_MAX_LINE_LENGTH + 1, sizeof(char));
     /* out of resources */
     if (NULL == input) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         return NULL;
     }
     ret = fgets(input, RAS_BASE_FILE_MAX_LINE_LENGTH, fp);
@@ -411,20 +411,20 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
             /*          Fail only when number of attempts have been exhausted.            */
             if (iTrips <= max_appinfo_read_attempts)
                 continue;
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-            return PRTE_ERR_FILE_OPEN_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
+            return PMIX_ERR_FILE_OPEN_FAILURE;
         }
         if (fstat(iFd, &ssBuf) == -1) { /* If stat fails, access denied   */
 
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_AVAILABLE);
-            return PRTE_ERR_NOT_AVAILABLE;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_AVAILABLE);
+            return PMIX_ERR_NOT_AVAILABLE;
         }
 
         szLen = ssBuf.st_size;     /* Get buffer size                */
         cpBuf = malloc(szLen + 1); /* Allocate buffer                */
         if (NULL == cpBuf) {
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
 
         /*      Repeated attempts to read appinfo, with an increasing delay between   *
@@ -444,8 +444,8 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
             /*          Fail only when number of attempts have been exhausted.            */
             if (iTrips <= max_appinfo_read_attempts)
                 continue;
-            PRTE_ERROR_LOG(PRTE_ERR_FILE_READ_FAILURE);
-            return PRTE_ERR_FILE_READ_FAILURE;
+            PRTE_ERROR_LOG(PMIX_ERR_FILE_READ_FAILURE);
+            return PMIX_ERR_FILE_READ_FAILURE;
         }
     }
     close(iFd);
@@ -507,8 +507,8 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
 
             pmix_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
             if (NULL == hostname) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
 
             /*          If this matches the prior nodename, just add to the slot count.   */
@@ -556,8 +556,8 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
                                 apNodes[ix].nid, apNodes[ix].numPEs);
             pmix_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
             if (NULL == hostname) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
 
             node = PMIX_NEW(prte_node_t);

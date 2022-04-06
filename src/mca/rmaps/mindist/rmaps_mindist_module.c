@@ -164,7 +164,7 @@ static int mindist_map(prte_job_t *jdata)
         if (NULL != job_cpuset) {
             free(job_cpuset);
         }
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* cycle through the app_contexts, mapping them sequentially */
@@ -283,8 +283,8 @@ static int mindist_map(prte_job_t *jdata)
                 /* get the available processors on this node */
                 if (NULL == obj->userdata) {
                     /* incorrect */
-                    PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                    return PRTE_ERR_BAD_PARAM;
+                    PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                    return PMIX_ERR_BAD_PARAM;
                 }
                 rdata = (prte_hwloc_topo_data_t *) obj->userdata;
                 available = hwloc_bitmap_dup(rdata->available);
@@ -402,8 +402,8 @@ static int mindist_map(prte_job_t *jdata)
                             == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                                       HWLOC_OBJ_NUMANODE, 0,
                                                                       numa->index))) {
-                            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                            return PRTE_ERR_NOT_FOUND;
+                            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                            return PMIX_ERR_NOT_FOUND;
                         }
                         npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
                                                         available, obj);
@@ -415,7 +415,7 @@ static int mindist_map(prte_job_t *jdata)
                         }
                         for (k = 0; (k < required) && (nprocs_mapped < app->num_procs); k++) {
                             if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, i))) {
-                                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                                rc = PMIX_ERR_OUT_OF_RESOURCE;
                                 goto error;
                             }
                             nprocs_mapped++;
@@ -584,9 +584,9 @@ static int assign_locations(prte_job_t *jdata)
                 if (NULL
                     == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE,
                                                               0, numa->index))) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                    PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
                     PMIX_LIST_DESTRUCT(&numa_list);
-                    return PRTE_ERR_NOT_FOUND;
+                    return PMIX_ERR_NOT_FOUND;
                 }
                 npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available,
                                                 obj);

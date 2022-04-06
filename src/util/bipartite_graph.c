@@ -141,7 +141,7 @@ static int set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
     CHECK_VERTEX_RANGE(g, source);
     CHECK_VERTEX_RANGE(g, target);
 
-    FOREACH_OUT_EDGE(g, source, e, PRTE_ERR_NOT_FOUND)
+    FOREACH_OUT_EDGE(g, source, e, PMIX_ERR_NOT_FOUND)
     {
         assert(e->source == source);
         if (e->target == target) {
@@ -150,7 +150,7 @@ static int set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 static void free_vertex(prte_bp_graph_t *g, prte_bp_graph_vertex_t *v)
@@ -170,14 +170,14 @@ int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
     prte_bp_graph_t *g = NULL;
 
     if (NULL == g_out) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     *g_out = NULL;
 
     g = calloc(1, sizeof(*g));
     if (NULL == g) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        err = PMIX_ERR_OUT_OF_RESOURCE;
         goto out_free_g;
     }
 
@@ -251,7 +251,7 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
     prte_bp_graph_edge_t *e;
 
     if (NULL == g_clone_out) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     *g_clone_out = NULL;
 
@@ -259,7 +259,7 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
         prte_output(0, "[%s:%d:%s] user data copy requested but not yet supported", __FILE__,
                     __LINE__, __func__);
         abort();
-        return PRTE_ERR_FATAL;
+        return PMIX_ERR_FATAL;
     }
 
     gx = NULL;
@@ -284,7 +284,7 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
         prte_bp_graph_vertex_t *_v;
         _v = V_ID_TO_PTR(g, i);
         if (NULL == _v) {
-            err = PRTE_ERR_NOT_FOUND;
+            err = PMIX_ERR_NOT_FOUND;
             goto out_free_gx;
         }
         LIST_FOREACH_CONTAINED(e, &(_v->out_edges), prte_bp_graph_edge_t, outbound_li)
@@ -313,8 +313,8 @@ int prte_bp_graph_indegree(const prte_bp_graph_t *g, int vertex)
 
     v = V_ID_TO_PTR(g, vertex);
     if (NULL == v) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     return pmix_list_get_size(&v->in_edges);
 }
@@ -334,32 +334,32 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
     prte_bp_graph_vertex_t *v_from, *v_to;
 
     if (from < 0 || from >= NUM_VERTICES(g)) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (to < 0 || to >= NUM_VERTICES(g)) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (cost == MAX_COST) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (capacity < 0) {
         /* negative cost is fine, but negative capacity is not currently
          * handled appropriately */
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
-    FOREACH_OUT_EDGE(g, from, e, PRTE_ERR_NOT_FOUND)
+    FOREACH_OUT_EDGE(g, from, e, PMIX_ERR_NOT_FOUND)
     {
         assert(e->source == from);
         if (e->target == to) {
-            return PRTE_EXISTS;
+            return PMIX_EXISTS;
         }
     }
 
     /* this reference is owned by the out_edges list */
     e = PMIX_NEW(prte_bp_graph_edge_t);
     if (NULL == e) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     e->source = from;
@@ -370,8 +370,8 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
 
     v_from = V_ID_TO_PTR(g, from);
     if (NULL == v_from) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     pmix_list_append(&v_from->out_edges, &e->outbound_li);
 
@@ -388,8 +388,8 @@ int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out)
 
     v = calloc(1, sizeof(*v));
     if (NULL == v) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
 
     /* add to the ptr array early to simplify cleanup in the incredibly rare
@@ -397,8 +397,8 @@ int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out)
     v->v_index = pmix_pointer_array_add(&g->vertices, v);
     if (-1 == v->v_index) {
         free(v);
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     assert(v->v_index == g->num_vertices);
 
@@ -494,25 +494,25 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx, int source, int target, int
     bool found_target = false;
 
     if (NULL == gx) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         return false;
     }
     if (NULL == pred) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
         return false;
     }
     if (source < 0 || source >= NUM_VERTICES(gx)) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     if (target < 0 || target >= NUM_VERTICES(gx)) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* initialize */
     n = prte_bp_graph_order(gx);
     dist = malloc(n * sizeof(*dist));
     if (NULL == dist) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
         goto out;
     }
     for (i = 0; i < n; ++i) {
@@ -672,7 +672,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
     /* it doesn't make sense to extend this graph with a source and sink
      * unless */
     if (num_right == 0 || num_left == 0) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* now run through and create "residual" edges as well (i.e., create edges
@@ -684,7 +684,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
                                           source/sink edges too */
     for (u = 0; u < order; ++u) {
         prte_bp_graph_edge_t *e_ptr;
-        FOREACH_OUT_EDGE(g, u, e_ptr, PRTE_ERR_NOT_FOUND)
+        FOREACH_OUT_EDGE(g, u, e_ptr, PMIX_ERR_NOT_FOUND)
         {
             v = e_ptr->target;
 
@@ -694,7 +694,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
             err = prte_bp_graph_add_edge(g, v, u, -e_ptr->cost,
                                          /*capacity=*/0,
                                          /*e_data=*/NULL);
-            if (PRTE_SUCCESS != err && PRTE_EXISTS != err) {
+            if (PRTE_SUCCESS != err && PMIX_EXISTS != err) {
                 return err;
             }
         }
@@ -727,7 +727,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
  * The result is an array of (u,v) vertex pairs, where (u,v) is an edge in the
  * original graph which has non-zero flow.
  *
- * Returns OMPI error codes like PRTE_SUCCESS/PRTE_ERR_OUT_OF_RESOURCE.
+ * Returns OMPI error codes like PRTE_SUCCESS/PMIX_ERR_OUT_OF_RESOURCE.
  *
  * This version of the algorithm has a theoretical upper bound on its running
  * time of O(|V|^2 * |E| * f), where f is essentially the maximum flow in the
@@ -756,7 +756,7 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx, int **flow_out)
     GRAPH_DEBUG_OUT(("begin min_cost_flow_ssp()"));
 
     if (NULL == flow_out) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     *flow_out = NULL;
 
@@ -764,16 +764,16 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx, int **flow_out)
 
     pred = malloc(n * sizeof(*pred));
     if (NULL == pred) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        err = PMIX_ERR_OUT_OF_RESOURCE;
         goto out_error;
     }
 
     /* "flow" is a 2d matrix of current flow values, all initialized to zero */
     flow = calloc(n * n, sizeof(*flow));
     if (NULL == flow) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        err = PMIX_ERR_OUT_OF_RESOURCE;
         goto out_error;
     }
 
@@ -844,7 +844,7 @@ int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g, int *num_
     prte_bp_graph_t *gx = NULL;
 
     if (NULL == match_edges_out || NULL == num_match_edges_out) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
     *num_match_edges_out = 0;
     *match_edges_out = NULL;
@@ -915,8 +915,8 @@ int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g, int *num_
     *match_edges_out = malloc(*num_match_edges_out * 2 * sizeof(int));
     if (NULL == *match_edges_out) {
         *num_match_edges_out = 0;
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        err = PMIX_ERR_OUT_OF_RESOURCE;
         goto out;
     }
 

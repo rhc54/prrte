@@ -570,7 +570,7 @@ static int do_open(int output_id, prte_output_stream_t *lds)
         }
         if (i >= PRTE_OUTPUT_MAX_STREAMS) {
             pmix_mutex_unlock(&mutex);
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -747,7 +747,7 @@ static int open_file(int i)
     if (NULL != output_dir) {
         filename = (char *) malloc(PRTE_PATH_MAX);
         if (NULL == filename) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         pmix_string_copy(filename, output_dir, PRTE_PATH_MAX);
         strcat(filename, "/");
@@ -770,14 +770,14 @@ static int open_file(int i)
         if (-1 == info[i].ldi_fd) {
             info[i].ldi_used = false;
             free(filename); /* release the filename in all cases */
-            return PRTE_ERR_IN_ERRNO;
+            return PMIX_ERR_IN_ERRNO;
         }
 
         /* Make the file be close-on-exec to prevent child inheritance
          * problems */
         if (-1 == fcntl(info[i].ldi_fd, F_SETFD, 1)) {
             free(filename); /* release the filename in all cases */
-            return PRTE_ERR_IN_ERRNO;
+            return PMIX_ERR_IN_ERRNO;
         }
 
         /* register it to be ignored */
@@ -866,7 +866,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi, const char 
         }
         temp_str = (char *) malloc(total_len * 2);
         if (NULL == temp_str) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         temp_str_len = total_len * 2;
     }
@@ -947,7 +947,7 @@ static int output(int output_id, const char *format, va_list arglist)
         if (ldi->ldi_stdout) {
             if (-1 == write(fileno(stdout), out, (int) strlen(out))) {
                 pmix_mutex_unlock(&mutex);
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
             fflush(stdout);
         }
@@ -977,7 +977,7 @@ static int output(int output_id, const char *format, va_list arglist)
                              ldi->ldi_file_num_lines_lost);
                     if (-1 == write(ldi->ldi_fd, buffer, (int) strlen(buffer))) {
                         pmix_mutex_unlock(&mutex);
-                        return PRTE_ERR_FATAL;
+                        return PMIX_ERR_FATAL;
                     }
                     ldi->ldi_file_num_lines_lost = 0;
                 }
@@ -985,7 +985,7 @@ static int output(int output_id, const char *format, va_list arglist)
             if (ldi->ldi_fd != -1) {
                 if (-1 == write(ldi->ldi_fd, out, (int) strlen(out))) {
                     pmix_mutex_unlock(&mutex);
-                    return PRTE_ERR_FATAL;
+                    return PMIX_ERR_FATAL;
                 }
             }
         }

@@ -53,13 +53,13 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
 
     if (PRTE_RML_TAG_INVALID == tag) {
         /* cannot send to an invalid tag */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     if (PMIX_RANK_INVALID == rank) {
         /* cannot send to an invalid peer */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /* if this is a message to myself, then just post the message

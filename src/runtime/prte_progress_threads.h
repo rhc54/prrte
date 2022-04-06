@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@ PRTE_EXPORT prte_event_base_t *prte_progress_thread_init(const char *name);
  * progress function is shut down and the event base associated with
  * it is destroyed.
  *
- * Will return PRTE_ERR_NOT_FOUND if the progress thread name does not
+ * Will return PMIX_ERR_NOT_FOUND if the progress thread name does not
  * exist; PRTE_SUCCESS otherwise.
  */
 PRTE_EXPORT int prte_progress_thread_finalize(const char *name);
@@ -53,7 +53,7 @@ PRTE_EXPORT int prte_progress_thread_finalize(const char *name);
  * that event base until prte_progress_thread_resume() is invoked on
  * that name.
  *
- * Will return PRTE_ERR_NOT_FOUND if the progress thread name does not
+ * Will return PMIX_ERR_NOT_FOUND if the progress thread name does not
  * exist; PRTE_SUCCESS otherwise.
  */
 PRTE_EXPORT int prte_progress_thread_pause(const char *name);
@@ -62,7 +62,7 @@ PRTE_EXPORT int prte_progress_thread_pause(const char *name);
  * Restart a previously-paused progress thread associated with this
  * name.
  *
- * Will return PRTE_ERR_NOT_FOUND if the progress thread name does not
+ * Will return PMIX_ERR_NOT_FOUND if the progress thread name does not
  * exist; PRTE_SUCCESS otherwise.
  */
 PRTE_EXPORT int prte_progress_thread_resume(const char *name);

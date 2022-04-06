@@ -377,8 +377,8 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
     PMIX_CONSTRUCT(&ds, pmix_list_t);
     for (n = 0; n < sig->sz; n++) {
         if (NULL == (jdata = prte_get_job_data_object(sig->signature[n].nspace))) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             break;
         }
         if (NULL == jdata->map || 0 == jdata->map->num_nodes) {
@@ -389,8 +389,8 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
                 rc = PRTE_SUCCESS;
                 break;
             }
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+            rc = PMIX_ERR_NOT_FOUND;
             break;
         }
         if (PMIX_RANK_WILDCARD == sig->signature[n].rank) {
@@ -404,8 +404,8 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
                     continue;
                 }
                 if (NULL == node->daemon) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    rc = PRTE_ERR_NOT_FOUND;
+                    PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                    rc = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 found = false;
@@ -435,13 +435,13 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
             if (NULL
                 == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                        sig->signature[n].rank))) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                rc = PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                rc = PMIX_ERR_NOT_FOUND;
                 goto done;
             }
             if (NULL == proc->node || NULL == proc->node->daemon) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                rc = PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+                rc = PMIX_ERR_NOT_FOUND;
                 goto done;
             }
             vpid = proc->node->daemon->name.rank;

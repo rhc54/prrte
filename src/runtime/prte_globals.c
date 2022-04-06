@@ -253,7 +253,7 @@ int prte_set_job_data_object(prte_job_t *jdata)
             continue;
         }
         if (PMIX_CHECK_NSPACE(jptr->nspace, jdata->nspace)) {
-            return PRTE_EXISTS;
+            return PMIX_EXISTS;
         }
     }
 
@@ -322,7 +322,7 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
 
     /* look it up on our arrays */
     if (NULL == (proct = prte_get_proc_object(proc))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         return PRTE_NODE_RANK_INVALID;
     }
     return proct->node_rank;

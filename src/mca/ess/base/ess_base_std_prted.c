@@ -124,7 +124,7 @@ int prte_ess_base_prted_setup(void)
     if (0 < (idx = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * idx);
         if (NULL == forward_signals_events) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
+            ret = PMIX_ERR_OUT_OF_RESOURCE;
             error = "unable to malloc";
             goto error;
         }

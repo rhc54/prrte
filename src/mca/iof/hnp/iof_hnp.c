@@ -231,7 +231,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
 
                         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                              "buffer backed up - holding"));
-                        return PRTE_ERR_OUT_OF_RESOURCE;
+                        return PMIX_ERR_OUT_OF_RESOURCE;
                     }
                 }
             } else {
@@ -276,7 +276,7 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
 
     /* this is a local call - only stdin is supported */
     if (PRTE_IOF_STDIN != src_tag) {
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PMIX_ERR_NOT_SUPPORTED;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,

@@ -352,7 +352,7 @@ static void track_procs(int fd, short argc, void *cbdata)
 
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
@@ -382,7 +382,7 @@ static void track_procs(int fd, short argc, void *cbdata)
 
     pdata = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pdata) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
         goto cleanup;
     }
 

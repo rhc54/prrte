@@ -793,7 +793,7 @@ static int remote_spawn(void)
         if (NULL == (hostname = prte_get_proc_hostname(&target))) {
             prte_output(0, "%s unable to get hostname for daemon %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->rank));
-            rc = PRTE_ERR_NOT_FOUND;
+            rc = PMIX_ERR_NOT_FOUND;
             goto cleanup;
         }
 
@@ -907,7 +907,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
         /* fork a child to exec the ssh/ssh session */
         pid = fork();
         if (pid < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+            PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
             prte_wait_cb_cancel(caddy->daemon);
             continue;
         }
@@ -1014,8 +1014,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -1051,7 +1051,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         prte_show_help("help-plm-ssh.txt", "deadlock-params", true,
                        prte_plm_ssh_component.num_concurrent, map->num_new_daemons);
-        PRTE_ERROR_LOG(PRTE_ERR_FATAL);
+        PRTE_ERROR_LOG(PMIX_ERR_FATAL);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
     }
@@ -1075,8 +1075,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, 0);
     if (NULL == app) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
     if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING)) {
@@ -1111,8 +1111,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if (NULL == node) {
         /* this should be impossible, but adding the check will
          * silence code checkers that don't know better */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -1160,7 +1160,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * have an error!
          */
         if (NULL == node->daemon) {
-            PRTE_ERROR_LOG(PRTE_ERR_FATAL);
+            PRTE_ERROR_LOG(PMIX_ERR_FATAL);
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:ssh:launch daemon failed to be defined on node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
@@ -1352,7 +1352,7 @@ static int launch_agent_setup(const char *agent, char *path)
 
     /* if no agent was provided, then report not found */
     if (NULL == prte_plm_ssh_component.agent && NULL == agent) {
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* search for the argv */
@@ -1364,7 +1364,7 @@ static int launch_agent_setup(const char *agent, char *path)
 
     if (0 == pmix_argv_count(ssh_agent_argv)) {
         /* nothing was found */
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     /* see if we can find the agent in the path */
@@ -1373,7 +1373,7 @@ static int launch_agent_setup(const char *agent, char *path)
     if (NULL == ssh_agent_path) {
         /* not an error - just report not found */
         pmix_argv_free(ssh_agent_argv);
-        return PRTE_ERR_NOT_FOUND;
+        return PMIX_ERR_NOT_FOUND;
     }
 
     bname = pmix_basename(ssh_agent_argv[0]);
@@ -1424,13 +1424,13 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: pipe failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
-        return PRTE_ERR_IN_ERRNO;
+        return PMIX_ERR_IN_ERRNO;
     }
     if ((pid = fork()) < 0) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: fork failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
-        return PRTE_ERR_IN_ERRNO;
+        return PMIX_ERR_IN_ERRNO;
     } else if (pid == 0) { /* child */
         if (dup2(fd[1], 1) < 0) {
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -1451,7 +1451,7 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: close failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
-        return PRTE_ERR_IN_ERRNO;
+        return PMIX_ERR_IN_ERRNO;
     }
 
     {
@@ -1467,7 +1467,7 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:ssh: Unable to detect the remote shell (error %s)",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), strerror(errno)));
-                rc = PRTE_ERR_IN_ERRNO;
+                rc = PMIX_ERR_IN_ERRNO;
                 break;
             }
             if (outbufsize > 1) {
@@ -1580,7 +1580,7 @@ static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshel
         char **tmp;
         tmp = pmix_argv_split("( test ! -r ./.profile || . ./.profile;", ' ');
         if (NULL == tmp) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
         for (i = 0; NULL != tmp[i]; ++i) {
             pmix_argv_append(argc, argv, tmp[i]);

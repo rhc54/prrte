@@ -222,20 +222,20 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     char *str;
 
     if (NULL == file || NULL == topic) {
-        return PRTE_ERR_BAD_PARAM;
+        return PMIX_ERR_BAD_PARAM;
     }
 
     str = prte_show_help_vstring(file, topic, true, ap);
 
     msg->file_str_len = (int) strlen(file);
     if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     msg->topic_str_len = (int) strlen(topic);
     if (msg->topic_str_len > PRTE_ODLS_MAX_TOPIC_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return PMIX_ERR_BAD_PARAM;
     }
     msg->msg_str_len = (int) strlen(str);
 
@@ -287,14 +287,14 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
 
     dir = opendir("/proc/self/fd");
     if (NULL == dir) {
-        return PRTE_ERR_FILE_OPEN_FAILURE;
+        return PMIX_ERR_FILE_OPEN_FAILURE;
     }
 
     /* grab the fd of the opendir above so we don't close in the
      * middle of the scan. */
     int dir_scan_fd = dirfd(dir);
     if (dir_scan_fd < 0) {
-        return PRTE_ERR_FILE_OPEN_FAILURE;
+        return PMIX_ERR_FILE_OPEN_FAILURE;
     }
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr,
@@ -306,7 +306,7 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
     rc = alps_app_lli_pipes(app_alps_filedes, alps_app_filedes);
     if (0 != rc) {
         closedir(dir);
-        return PRTE_ERR_FILE_OPEN_FAILURE;
+        return PMIX_ERR_FILE_OPEN_FAILURE;
     }
 
     while ((files = readdir(dir)) != NULL) {
@@ -316,7 +316,7 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
         fd = strtoul(files->d_name, NULL, 10);
         if (EINVAL == errno || ERANGE == errno) {
             closedir(dir);
-            return PRTE_ERR_TYPE_MISMATCH;
+            return PMIX_ERR_TYPE_MISMATCH;
         }
 
         /*
@@ -585,12 +585,12 @@ static int odls_alps_fork_local_proc(void *cdptr)
        then the exec() succeeded.  If the parent reads something from
        the pipe, then the child was letting us know why it failed. */
     if (pipe(p) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
         if (NULL != cd->child) {
             cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            cd->child->exit_code = PRTE_ERR_SYS_LIMITS_PIPES;
+            cd->child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
         }
-        return PRTE_ERR_SYS_LIMITS_PIPES;
+        return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
     /* Fork off the child */
@@ -600,12 +600,12 @@ static int odls_alps_fork_local_proc(void *cdptr)
     }
 
     if (pid < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
         if (NULL != cd->child) {
             cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            cd->child->exit_code = PRTE_ERR_SYS_LIMITS_CHILDREN;
+            cd->child->exit_code = PMIX_ERR_SYS_LIMITS_CHILDREN;
         }
-        return PRTE_ERR_SYS_LIMITS_CHILDREN;
+        return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
 
     if (pid == 0) {
@@ -669,7 +669,7 @@ static int send_signal(pid_t pid, int signal)
     if (kill(pid, signal) != 0) {
         switch (errno) {
         case EINVAL:
-            rc = PRTE_ERR_BAD_PARAM;
+            rc = PMIX_ERR_BAD_PARAM;
             break;
         case ESRCH:
             /* This case can occur when we deliver a signal to a
@@ -679,7 +679,7 @@ static int send_signal(pid_t pid, int signal)
                ignore the error.  */
             break;
         case EPERM:
-            rc = PRTE_ERR_PERM;
+            rc = PMIX_ERR_NO_PERMISSIONS;
             break;
         default:
             rc = PRTE_ERROR;

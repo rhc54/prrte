@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,7 +51,7 @@ PRTE_EXPORT char *prte_stackframe_output_string(void);
  * by the user.
  *
  *  @returnvalue PRTE_SUCCESS
- *  @returnvalue PRTE_ERR_BAD_PARAM if the value in the signal-list
+ *  @returnvalue PMIX_ERR_BAD_PARAM if the value in the signal-list
  *    is not a valid signal-number
  *
  */

@@ -209,8 +209,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        rc = PMIX_ERR_NOT_FOUND;
         goto cleanup;
     }
 

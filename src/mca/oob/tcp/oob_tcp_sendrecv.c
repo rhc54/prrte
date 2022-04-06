@@ -153,7 +153,7 @@ retry:
             if (retries < OOB_SEND_MAX_RETRIES) {
                 goto retry;
             }
-            return PRTE_ERR_RESOURCE_BUSY;
+            return PMIX_ERR_RESOURCE_BUSY;
         } else if (prte_socket_errno == EWOULDBLOCK) {
             /* tell the caller to keep this message on active,
              * but let the event lib cycle so other messages
@@ -163,12 +163,12 @@ retry:
             if (retries < OOB_SEND_MAX_RETRIES) {
                 goto retry;
             }
-            return PRTE_ERR_WOULD_BLOCK;
+            return PMIX_ERR_WOULD_BLOCK;
         } else {
             /* we hit an error and cannot progress this message */
             prte_output(0, "oob:tcp: send_msg: write failed: %s (%d) [sd = %d]",
                         strerror(prte_socket_errno), prte_socket_errno, peer->sd);
-            return PRTE_ERR_UNREACH;
+            return PMIX_ERR_UNREACH;
         }
     } else {
         /* short writev. This usually means the kernel buffer is full,
@@ -186,7 +186,7 @@ retry:
             msg->sdptr = (char *) iov[1].iov_base + rc;
             msg->sdbytes = ntohl(msg->hdr.nbytes) - rc;
         }
-        return PRTE_ERR_RESOURCE_BUSY;
+        return PMIX_ERR_RESOURCE_BUSY;
     }
 }
 
@@ -253,7 +253,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                     peer->send_msg = NULL;
                 }
                 /* fall thru to queue the next message */
-            } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
+            } else if (PMIX_ERR_RESOURCE_BUSY == rc || PMIX_ERR_WOULD_BLOCK == rc) {
                 /* exit this event and let the event lib progress */
                 return;
             } else {
@@ -313,13 +313,13 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
                  * but let the event lib cycle so other messages
                  * can progress while this socket is busy
                  */
-                return PRTE_ERR_RESOURCE_BUSY;
+                return PMIX_ERR_RESOURCE_BUSY;
             } else if (prte_socket_errno == EWOULDBLOCK) {
                 /* tell the caller to keep this message on active,
                  * but let the event lib cycle so other messages
                  * can progress while this socket is busy
                  */
-                return PRTE_ERR_WOULD_BLOCK;
+                return PMIX_ERR_WOULD_BLOCK;
             }
             /* we hit an error and cannot progress this message - report
              * the error back to the RML and let the caller know
@@ -362,7 +362,7 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
             // if (NULL != mca_oob_tcp.oob_exception_callback) {
             //   mca_oob_tcp.oob_exception_callback(&peer->peer_name, PRTE_RML_PEER_DISCONNECTED);
             //}
-            return PRTE_ERR_WOULD_BLOCK;
+            return PMIX_ERR_WOULD_BLOCK;
         }
         /* we were able to read something, so adjust counters and location */
         peer->recv_msg->rdbytes -= rc;
@@ -418,7 +418,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
             /* update our state */
             peer->state = MCA_OOB_TCP_CONNECTED;
-        } else if (PRTE_ERR_UNREACH != rc) {
+        } else if (PMIX_ERR_UNREACH != rc) {
             /* we get an unreachable error returned if a connection
              * completes but is rejected - otherwise, we don't want
              * to terminate as we might be retrying the connection */
@@ -479,7 +479,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     peer->recv_msg->rdbytes = peer->recv_msg->hdr.nbytes;
                 }
                 /* fall thru and attempt to read the data */
-            } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
+            } else if (PMIX_ERR_RESOURCE_BUSY == rc || PMIX_ERR_WOULD_BLOCK == rc) {
                 /* exit this event and let the event lib progress */
                 return;
             } else {
@@ -546,7 +546,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 }
                 peer->recv_msg = NULL;
                 return;
-            } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
+            } else if (PMIX_ERR_RESOURCE_BUSY == rc || PMIX_ERR_WOULD_BLOCK == rc) {
                 /* exit this event and let the event lib progress */
                 return;
             } else {

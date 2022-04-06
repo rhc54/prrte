@@ -73,7 +73,7 @@ static int init_server(void)
                 /* filename is not correctly formatted */
                 prte_show_help("help-prun.txt", "prun:ompi-server-filename-bad", true,
                                prte_tool_basename, prte_data_server_uri);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             ++filename; /* space past the : */
 
@@ -81,7 +81,7 @@ static int init_server(void)
                 /* they forgot to give us the name! */
                 prte_show_help("help-prun.txt", "prun:ompi-server-filename-missing", true,
                                prte_tool_basename, prte_data_server_uri);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
 
             /* open the file and extract the uri */
@@ -89,14 +89,14 @@ static int init_server(void)
             if (NULL == fp) { /* can't find or read file! */
                 prte_show_help("help-prun.txt", "prun:ompi-server-filename-access", true,
                                prte_tool_basename, prte_data_server_uri);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             if (NULL == fgets(input, 1024, fp)) {
                 /* something malformed about file */
                 fclose(fp);
                 prte_show_help("help-prun.txt", "prun:ompi-server-file-bad", true,
                                prte_tool_basename, prte_data_server_uri, prte_tool_basename);
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
             fclose(fp);
             input[strlen(input) - 1] = '\0'; /* remove newline */
@@ -491,7 +491,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
         goto release;
     }
 
-    if (PRTE_ERR_NOT_FOUND == status) {
+    if (PMIX_ERR_NOT_FOUND == status) {
         ret = PMIX_ERR_NOT_FOUND;
         goto release;
     } else if (PRTE_ERR_PARTIAL_SUCCESS == status) {
@@ -576,7 +576,7 @@ release:
             req->lkcbfunc(ret, pdata, npdata, req->cbdata);
         } else {
             /* should not happen */
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
+            PRTE_ERROR_LOG(PMIX_ERR_NOT_SUPPORTED);
         }
 
         /* cleanup */

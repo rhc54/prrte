@@ -198,7 +198,7 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
                                 "mca:rmaps:rank_span: found %d objects on node %s with %d procs", num_objs,
                                 node->name, (int) node->num_procs);
             if (0 == num_objs) {
-                return PRTE_ERR_NOT_SUPPORTED;
+                return PMIX_ERR_NOT_SUPPORTED;
             }
 
             /* for each object */
@@ -319,7 +319,7 @@ static int rank_fill(prte_job_t *jdata,
                                 "mca:rmaps:rank_fill: found %d objects on node %s with %d procs",
                                 num_objs, node->name, (int) node->num_procs);
             if (0 == num_objs) {
-                return PRTE_ERR_NOT_SUPPORTED;
+                return PMIX_ERR_NOT_SUPPORTED;
             }
 
             /* for each object */
@@ -531,7 +531,7 @@ static int rank_by(prte_job_t *jdata,
                                 num_objs, node->name, (int) node->num_procs);
             if (0 == num_objs) {
                 PMIX_DESTRUCT(&objs);
-                return PRTE_ERR_NOT_SUPPORTED;
+                return PMIX_ERR_NOT_SUPPORTED;
             }
             /* collect all the objects */
             for (i = 0; i < num_objs; i++) {
@@ -708,7 +708,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             "mca:rmaps: computing ranks by package for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PACKAGE, 0, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -723,7 +723,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             "mca:rmaps: computing ranks by NUMA for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_NUMANODE, 0, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -739,7 +739,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_HWLOC_MAKE_OBJ_CACHE(3, target, cache_level);
         if (PRTE_SUCCESS != (rc = rank_by(jdata, target, cache_level, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -755,7 +755,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_HWLOC_MAKE_OBJ_CACHE(2, target, cache_level);
         if (PRTE_SUCCESS != (rc = rank_by(jdata, target, cache_level, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -771,7 +771,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_HWLOC_MAKE_OBJ_CACHE(1, target, cache_level);
         if (PRTE_SUCCESS != (rc = rank_by(jdata, target, cache_level, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -786,7 +786,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             "mca:rmaps: computing ranks by core for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_CORE, 0, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -801,7 +801,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             "mca:rmaps: computing ranks by hwthread for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PU, 0, matched))) {
-            if (PRTE_ERR_NOT_SUPPORTED == rc
+            if (PMIX_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
                 goto rankbyslot;
@@ -875,7 +875,7 @@ rankbyslot:
         return rc;
     }
 
-    return PRTE_ERR_NOT_IMPLEMENTED;
+    return PMIX_ERR_NOT_IMPLEMENTED;
 }
 
 int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)

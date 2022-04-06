@@ -324,7 +324,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 if (NULL != rawname) {
                     free(rawname);
                 }
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                return PMIX_ERR_OUT_OF_RESOURCE;
             }
             if (prte_keep_fqdn_hostnames || NULL == shortname) {
                 node->name = strdup(ndname);

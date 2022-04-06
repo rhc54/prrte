@@ -53,7 +53,7 @@ int prte_ess_alps_get_first_rank_on_node(int *first_rank)
     alpsAppLayout_t orted_layout;
 
     if (first_rank == NULL) {
-        ret = PRTE_ERR_BAD_PARAM;
+        ret = PMIX_ERR_BAD_PARAM;
         goto fn_exit;
     }
 
@@ -66,7 +66,7 @@ int prte_ess_alps_get_first_rank_on_node(int *first_rank)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_lock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit;
     }
 
@@ -75,7 +75,7 @@ int prte_ess_alps_get_first_rank_on_node(int *first_rank)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_put_request - APID returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -84,7 +84,7 @@ int prte_ess_alps_get_first_rank_on_node(int *first_rank)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alps_status));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -93,7 +93,7 @@ int prte_ess_alps_get_first_rank_on_node(int *first_rank)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response_bytes returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -118,7 +118,7 @@ fn_exit_w_lock:
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_unlock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
     }
 
 fn_exit:
@@ -140,7 +140,7 @@ int prte_ess_alps_sync_start(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_lock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit;
     }
 
@@ -149,7 +149,7 @@ int prte_ess_alps_sync_start(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_put_request returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -158,7 +158,7 @@ int prte_ess_alps_sync_start(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alps_status));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -168,7 +168,7 @@ fn_exit_w_lock:
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_unlock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
     }
 
 fn_exit:
@@ -191,7 +191,7 @@ int prte_ess_alps_sync_complete(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_lock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit;
     }
 
@@ -200,7 +200,7 @@ int prte_ess_alps_sync_complete(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_put_request returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -209,7 +209,7 @@ int prte_ess_alps_sync_complete(void)
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alps_status));
-        ret = PRTE_ERR_FILE_READ_FAILURE;
+        ret = PMIX_ERR_FILE_READ_FAILURE;
         goto fn_exit_w_lock;
     }
 
@@ -219,7 +219,7 @@ fn_exit_w_lock:
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_unlock returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), lli_ret));
-        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        ret = PMIX_ERR_FILE_WRITE_FAILURE;
     }
 
 fn_exit:

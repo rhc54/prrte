@@ -109,7 +109,7 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
         prte_output(0, "%s-%s tcp_peer_create_socket: socket() failed: %s (%d)\n",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                     strerror(prte_socket_errno), prte_socket_errno);
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
     }
 
     /* Set this fd to be close-on-exec so that any subsequent children don't see it */
@@ -453,7 +453,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     /* send our globally unique process identifier to the peer */
     if (PRTE_SUCCESS == (rc = tcp_peer_send_connect_ack(peer))) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
-    } else if (PRTE_ERR_UNREACH == rc) {
+    } else if (PMIX_ERR_UNREACH == rc) {
         /* this could happen if we are in a race condition where both
          * we and the peer are trying to connect at the same time. If I
          * am the higher vpid, then retry the connection - otherwise,
@@ -521,7 +521,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     /* create a space for our message */
     sdsize += sizeof(hdr);
     if (NULL == (msg = (char *) malloc(sdsize))) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
@@ -538,7 +538,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
         free(msg);
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
     }
     free(msg);
 
@@ -576,7 +576,7 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     /* create a space for our message */
     sdsize += sizeof(hdr);
     if (NULL == (msg = (char *) malloc(sdsize))) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
@@ -720,7 +720,7 @@ static int tcp_peer_send_blocking(int sd, void *data, size_t size)
                 prte_output(0, "%s tcp_peer_send_blocking: send() to socket %d failed: %s (%d)\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, strerror(prte_socket_errno),
                             prte_socket_errno);
-                return PRTE_ERR_UNREACH;
+                return PMIX_ERR_UNREACH;
             }
             continue;
         }
@@ -820,7 +820,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->state,
                             PRTE_NAME_PRINT(&(peer->name)), sd);
                 prte_oob_tcp_peer_close(peer);
-                return PRTE_ERR_UNREACH;
+                return PMIX_ERR_UNREACH;
             }
         }
     } else {
@@ -829,7 +829,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                             "%s unable to complete recv of connect-ack from %s ON SOCKET %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&peer->name), sd);
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
     }
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
@@ -899,7 +899,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     if (NULL == (msg = (char *) malloc(hdr.nbytes))) {
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        return PMIX_ERR_OUT_OF_RESOURCE;
     }
     if (!tcp_peer_recv_blocking(peer, sd, msg, hdr.nbytes)) {
         /* unable to complete the recv but should never happen */
@@ -908,7 +908,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name),
                             peer->sd);
         free(msg);
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
     }
 
     /* Check the type of acknowledgement */
@@ -947,7 +947,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
             prte_oob_tcp_peer_close(peer);
         }
         free(msg);
-        return PRTE_ERR_UNREACH;
+        return PMIX_ERR_UNREACH;
     }
 
     /* check for a race condition - if I was in the process of
@@ -961,7 +961,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
             || MCA_OOB_TCP_CONNECT_ACK == peer->state)) {
         if (retry(peer, sd, false)) {
             free(msg);
-            return PRTE_ERR_UNREACH;
+            return PMIX_ERR_UNREACH;
         }
     }
 

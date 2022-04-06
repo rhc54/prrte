@@ -125,7 +125,7 @@ int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cb
         if (st->job_state == state) {
             PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                  "DUPLICATE STATE DEFINED: %s", prte_job_state_to_str(state)));
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
 
@@ -175,7 +175,7 @@ int prte_state_base_set_job_state_priority(prte_job_state_t state, int priority)
             return PRTE_SUCCESS;
         }
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 int prte_state_base_remove_job_state(prte_job_state_t state)
@@ -192,7 +192,7 @@ int prte_state_base_remove_job_state(prte_job_state_t state)
             return PRTE_SUCCESS;
         }
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 void prte_state_base_print_job_state_machine(void)
@@ -279,7 +279,7 @@ int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t 
         if (st->proc_state == state) {
             PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                  "DUPLICATE STATE DEFINED: %s", prte_proc_state_to_str(state)));
-            return PRTE_ERR_BAD_PARAM;
+            return PMIX_ERR_BAD_PARAM;
         }
     }
 
@@ -305,7 +305,7 @@ int prte_state_base_set_proc_state_callback(prte_proc_state_t state, prte_state_
             return PRTE_SUCCESS;
         }
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priority)
@@ -321,7 +321,7 @@ int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priorit
             return PRTE_SUCCESS;
         }
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 int prte_state_base_remove_proc_state(prte_proc_state_t state)
@@ -338,7 +338,7 @@ int prte_state_base_remove_proc_state(prte_proc_state_t state)
             return PRTE_SUCCESS;
         }
     }
-    return PRTE_ERR_NOT_FOUND;
+    return PMIX_ERR_NOT_FOUND;
 }
 
 void prte_state_base_print_proc_state_machine(void)

@@ -107,15 +107,15 @@ static int slurm_set_name(void)
     PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
 
     if (NULL == prte_ess_base_nspace) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
 
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
 
     if (NULL == prte_ess_base_vpid) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
@@ -131,8 +131,8 @@ static int slurm_set_name(void)
         free(prte_process_info.nodename);
     }
     if (NULL == (tmp = getenv("SLURMD_NODENAME"))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return PMIX_ERR_NOT_FOUND;
     }
     prte_process_info.nodename = strdup(tmp);
 

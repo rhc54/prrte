@@ -122,7 +122,7 @@ static int _setup_tmpdir_base(void)
     if (NULL == prte_process_info.tmpdir_base) {
         prte_process_info.tmpdir_base = strdup(pmix_tmp_directory());
         if (NULL == prte_process_info.tmpdir_base) {
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            rc = PMIX_ERR_OUT_OF_RESOURCE;
             goto exit;
         }
     }
@@ -147,7 +147,7 @@ int prte_setup_top_session_dir(void)
         }
         if (NULL == prte_process_info.nodename || NULL == prte_process_info.tmpdir_base) {
             /* we can't setup top session dir */
-            rc = PRTE_ERR_BAD_PARAM;
+            rc = PMIX_ERR_BAD_PARAM;
             goto exit;
         }
         if (prte_add_pid_to_session_dirname) {
@@ -155,7 +155,7 @@ int prte_setup_top_session_dir(void)
                                   prte_process_info.tmpdir_base, prte_process_info.nodename,
                                   (unsigned long)pid, (unsigned long) uid)) {
                 prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PMIX_ERR_OUT_OF_RESOURCE;
                 goto exit;
             }
         } else {
@@ -163,7 +163,7 @@ int prte_setup_top_session_dir(void)
                                   prte_process_info.tmpdir_base, prte_process_info.nodename,
                                   (unsigned long) uid)) {
                 prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PMIX_ERR_OUT_OF_RESOURCE;
                 goto exit;
             }
         }
@@ -190,7 +190,7 @@ static int _setup_jobfam_session_dir(pmix_proc_t *proc)
         if (0 > pmix_asprintf(&prte_process_info.jobfam_session_dir, "%s/dvm.%lu",
                               prte_process_info.top_session_dir,
                               (unsigned long) prte_process_info.pid)) {
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            rc = PMIX_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -214,7 +214,7 @@ static int _setup_job_session_dir(pmix_proc_t *proc)
                                   prte_process_info.jobfam_session_dir,
                                   PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
                 prte_process_info.job_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PMIX_ERR_OUT_OF_RESOURCE;
                 goto exit;
             }
         } else {
@@ -242,7 +242,7 @@ static int _setup_proc_session_dir(pmix_proc_t *proc)
             if (0 > pmix_asprintf(&prte_process_info.proc_session_dir, "%s/%s",
                                   prte_process_info.job_session_dir, PRTE_VPID_PRINT(proc->rank))) {
                 prte_process_info.proc_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PMIX_ERR_OUT_OF_RESOURCE;
                 goto exit;
             }
         } else {
@@ -292,7 +292,7 @@ int prte_session_setup_base(pmix_proc_t *proc)
                 prte_show_help("help-prte-runtime.txt", "prte:session:dir:prohibited", true,
                                prte_process_info.tmpdir_base, prte_prohibited_session_dirs);
                 pmix_argv_free(list);
-                return PRTE_ERR_FATAL;
+                return PMIX_ERR_FATAL;
             }
         }
         pmix_argv_free(list); /* done with this */
@@ -311,7 +311,7 @@ int prte_session_dir(bool create, pmix_proc_t *proc)
      * Get the session directory full name
      */
     if (PRTE_SUCCESS != (rc = prte_session_setup_base(proc))) {
-        if (PRTE_ERR_FATAL == rc) {
+        if (PMIX_ERR_FATAL == rc) {
             /* this indicates we should abort quietly */
             rc = PRTE_ERR_SILENT;
         }
