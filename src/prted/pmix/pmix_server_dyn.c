@@ -1090,9 +1090,9 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     PMIX_RELEASE(md);
 }
 
-static void _cnct(int sd, short args, void *cbdata)
+int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
+                              pmix_data_buffer_t *dbuf)
 {
-    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     char **keys = NULL;
     prte_job_t *jdata;
     int rc = PRTE_SUCCESS;
@@ -1102,13 +1102,8 @@ static void _cnct(int sd, short args, void *cbdata)
     pmix_value_t *val;
     pmix_info_t info[2], *isrc, *idest, procdata;
     prte_proc_t *proc;
-    pmix_data_buffer_t dbuf;
     pmix_data_array_t *darray;
     pmix_scope_t scope;
-    prte_pmix_mdx_caddy_t *md;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
-
-    PMIX_ACQUIRE_OBJECT(cd);
 
     /* at some point, we need to add bookeeping to track which
      * procs are "connected" so we know who to notify upon
@@ -1120,7 +1115,6 @@ static void _cnct(int sd, short args, void *cbdata)
      * missing nspaces */
 
     /* cycle thru the procs */
-    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
     PMIX_INFO_LOAD(&info[0], PMIX_OPTIONAL, NULL, PMIX_BOOL);
     scope = PMIX_REMOTE;
     PMIX_INFO_LOAD(&info[1], PMIX_DATA_SCOPE, &scope, PMIX_SCOPE);
@@ -1131,8 +1125,7 @@ static void _cnct(int sd, short args, void *cbdata)
              * server is just our HNP, then we have no way of finding
              * out about it, and all we can do is return an error */
             if (PMIX_CHECK_PROCID(&prte_pmix_server_globals.server, PRTE_PROC_MY_HNP)) {
-                rc = PRTE_ERR_NOT_SUPPORTED;
-                goto release;
+                return PRTE_ERR_NOT_SUPPORTED;
             }
             /* ask the global data server for the data - if we get it,
              * then we can complete the request */
@@ -1147,19 +1140,19 @@ static void _cnct(int sd, short args, void *cbdata)
                                                _cnlk, cd))) {
                 PMIX_ARGV_FREE_COMPAT(keys);
                 PMIX_INFO_FREE(cd->directives, cd->ndirs);
-                goto release;
+                return rc;
             }
             PMIX_ARGV_FREE_COMPAT(keys);
             /* the callback function on this lookup will return us to this
              * routine so we can continue the process */
-            return;
+            return PRTE_SUCCESS;
         }
         /* we know about the job - check to ensure it has been
          * registered with the local PMIx server */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, NULL, PMIX_BOOL)) {
             /* it hasn't been registered yet, so register it now */
             if (PRTE_SUCCESS != (rc = prte_pmix_server_register_nspace(jdata))) {
-                goto release;
+                return rc;
             }
         }
         /* cycle thru our local children and collect any info they have posted */
@@ -1184,12 +1177,11 @@ static void _cnct(int sd, short args, void *cbdata)
             }
             /* we should have received a data array containing all the requested info */
             /* first pack the nspace */
-            rc = PMIx_Data_pack(NULL, &dbuf, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+            rc = PMIx_Data_pack(NULL, dbuf, &jdata->nspace, 1, PMIX_PROC_NSPACE);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
                 PMIX_VALUE_RELEASE(val);
-                goto release;
+                return rc;
             }
             /* transfer the returned data to a data array suitable for PMIX_PROC_DATA */
             ninfo = 1 + val->data.darray->size;
@@ -1206,14 +1198,36 @@ static void _cnct(int sd, short args, void *cbdata)
             /* load the proc_data info */
             PMIX_INFO_LOAD(&procdata, PMIX_PROC_DATA, darray, PMIX_DATA_ARRAY);
             /* now pack it */
-            rc = PMIx_Data_pack(NULL, &dbuf, &procdata, 1, PMIX_INFO);
+            rc = PMIx_Data_pack(NULL, dbuf, &procdata, 1, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
-                goto release;
+                return rc;
             }
        }
     }
+    return PRTE_SUCCESS;
+}
+
+static void _cnct(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    char **keys = NULL;
+    prte_job_t *jdata;
+    int rc = PRTE_SUCCESS;
+    size_t k, n, ninfo;
+    int m;
+    uint32_t uid;
+    pmix_value_t *val;
+    pmix_info_t info[2], *isrc, *idest, procdata;
+    prte_proc_t *proc;
+    pmix_data_buffer_t dbuf;
+    pmix_data_array_t *darray;
+    pmix_scope_t scope;
+    prte_pmix_mdx_caddy_t *md;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
     /* PMIx server only calls us if this is a multi-node operation. In this
      * case, we also need to (a) execute a "fence" across the participating
      * nodes, (b) send along any information posted by the participants
@@ -1224,9 +1238,9 @@ static void _cnct(int sd, short args, void *cbdata)
     md->sig->sz = cd->nprocs;
     md->sig->signature = (pmix_proc_t *) malloc(md->sig->sz * sizeof(pmix_proc_t));
     memcpy(md->sig->signature, cd->procs, md->sig->sz * sizeof(pmix_proc_t));
-    md->buf = PMIx_Data_buffer_create();
-    rc = PMIx_Data_copy_payload(md->buf, &dbuf);
-    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+
+    PMIX_DATA_BUFFER_CREATE(md->buf);
+    rc = prte_pmix_connection_info(cd, md->buf);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(md);

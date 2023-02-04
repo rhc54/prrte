@@ -1049,6 +1049,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_mdx_caddy_t *cd;
+    prte_pmix_server_op_caddy_t scd;
     int rc;
     size_t i;
     bool assignID = false;
@@ -1056,6 +1057,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     bool fence = false;
     bool force_local = false;
     pmix_byte_object_t *bo = NULL;
+    pmix_data_buffer_t dbuf;
     struct timeval tv = {0, 0};
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -1131,15 +1133,25 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         PMIX_RELEASE(cd);
         return rc;
     }
+
+    /* collect the local connection info */
     PMIX_DATA_BUFFER_CREATE(cd->buf);
-    /* if they provided us with a data blob, send it along */
+    PMIX_CONSTRUCT(&scd, prte_pmix_server_op_caddy_t);
+    scd.procs = (pmix_proc_t*)procs;
+    scd.nprocs = nprocs;
+    rc = prte_pmix_connection_info(&scd, cd->buf);
+    scd.procs = NULL;
+    scd.nprocs = 0;
+    PMIX_DESTRUCT(&scd);
+
+    /* if they provided us with a data blob, send it along too */
     if (NULL != bo) {
-        /* We don't own the byte_object and so we have to
-         * copy it here */
-        rc = PMIx_Data_embed(cd->buf, bo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
+        dbuf.base_ptr = bo->bytes;
+        dbuf.pack_ptr = ((char *) dbuf.base_ptr) + bo->size;
+        dbuf.unpack_ptr = dbuf.base_ptr;
+        dbuf.bytes_used = bo->size;
+        dbuf.bytes_allocated = dbuf.bytes_used;
+        rc = PMIx_Data_copy_payload(cd->buf, &dbuf);
     }
     /* pass it to the global collective algorithm */
     if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd))) {

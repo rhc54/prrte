@@ -218,6 +218,9 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
+PRTE_EXPORT int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
+                                          pmix_data_buffer_t *dbuf);
+
 /* define the server module functions */
 PRTE_EXPORT extern pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc,
                                                                  void *server_object,
