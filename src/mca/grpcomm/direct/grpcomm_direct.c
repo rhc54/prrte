@@ -36,6 +36,10 @@
 #include "grpcomm_direct.h"
 #include "src/mca/grpcomm/base/base.h"
 
+#ifndef MAX
+#    define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 /* Static API's */
 static int init(void);
 static void finalize(void);
@@ -167,7 +171,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 {
     int32_t cnt;
     int rc, timeout;
-    size_t n, ninfo, memsize;
+    size_t n, ninfo;
     bool assignID = false;
     pmix_status_t st;
     pmix_info_t *info, infostat;
@@ -274,20 +278,6 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_STATUS;
             info[n].value.data.status = coll->status;
-#ifdef PMIX_SIZE_ESTIMATE
-        } else if (PMIX_CHECK_KEY(&info[n], PMIX_SIZE_ESTIMATE)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, memsize, size_t);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
-                PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
-                return;
-            }
-            coll->memsize += memsize;
-            /* update the info with the collected value */
-            info[n].value.type = PMIX_SIZE;
-            info[n].value.data.size = coll->memsize;
-#endif
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
             assignID = PMIX_INFO_TRUE(&info[n]);
             if (assignID) {
@@ -344,27 +334,16 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
-            /* add some values to the payload in the bucket */
 
-#ifdef PMIX_SIZE_ESTIMATE
-            /* pack the memory size */
-            PMIX_INFO_LOAD(&infostat, PMIX_SIZE_ESTIMATE, &coll->memsize, PMIX_SIZE);
-            rc = PMIx_Data_pack(NULL, reply, &infostat, 1, PMIX_INFO);
-            PMIX_INFO_DESTRUCT(&infostat);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
-                return;
-            }
-#endif
+            /* pack a controls buffer */
+            PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
             /* if we were asked to provide a context id, do so */
             if (assignID) {
                 size_t sz;
                 sz = prte_grpcomm_base.context_id;
                 --prte_grpcomm_base.context_id;
                 PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &sz, PMIX_UINT32);
-                rc = PMIx_Data_pack(NULL, reply, &infostat, 1, PMIX_INFO);
+                rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
                 PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
@@ -373,6 +352,29 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     return;
                 }
             }
+            /* even if the control buffer is empty, we still have
+             * to pack the byte object for it to ensure proper
+             * unpacking on the remote end */
+            rc = PMIx_Data_unload(&ctrlbuf, &ctrlsbo);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                return;
+            }
+            PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+            /* now pack the byte object */
+            rc = PMIx_Data_pack(NULL, reply, &ctrlsbo, 1, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+                return;
+            }
+            PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
             if (PMIX_SUCCESS != rc) {
@@ -417,10 +419,10 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(sig.signature, sig.sz);
-                PMIx_Byte_object_destruct(&ctrlsbo);
+                PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
                 return;
             }
-            PMIx_Byte_object_destruct(&ctrlsbo);
+            PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
 
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);

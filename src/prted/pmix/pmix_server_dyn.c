@@ -980,49 +980,52 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     bool assignedID = false;
     uint32_t ctxid;
     bool first = true;
-    char *payload;
-#ifdef PMIX_SIZE_ESTIMATE
-    size_t memsize = 0;
-#endif
+    pmix_byte_object_t ctrlsbo;
+    pmix_data_buffer_t ctrlbuf;
 
     PMIX_ACQUIRE_OBJECT(md);
 
     /* process returned data */
     if (NULL != buf && 0 != buf->bytes_used) {
-        /* check for any directives */
-        payload = buf->unpack_ptr;
+        /* unpack the ctrls object */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, buf, &infostat, &cnt, PMIX_INFO);
+        rc = PMIx_Data_unpack(NULL, buf, &ctrlsbo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto done;
+        }
+        PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
+        rc = PMIx_Data_load(&ctrlbuf, &ctrlsbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+            goto done;
+        }
+        PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+        /* check for any directives */
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &ctrlbuf, &infostat, &cnt, PMIX_INFO);
         while (PMIX_SUCCESS == rc) {
             if (PMIX_CHECK_KEY(&infostat, PMIX_GROUP_CONTEXT_ID)) {
                 PMIX_VALUE_GET_NUMBER(rc, &infostat.value, ctxid, uint32_t);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
-                } else {
-                    assignedID = true;
-                    ++ninfo;
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                    goto done;
                 }
-#ifdef PMIX_SIZE_ESTIMATE
-            } else if (PMIX_CHECK_KEY(&infostat, PMIX_SIZE_ESTIMATE)) {
-                PMIX_VALUE_GET_NUMBER(rc, &infostat.value, memsize, size_t);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                } else {
-                    ++ninfo;
-                }
-#endif
+                assignedID = true;
+                ninfo++;
             }
-            /* save where we are */
-            payload = buf->unpack_ptr;
-            /* cleanup */
-            PMIX_INFO_DESTRUCT(&infostat);
             /* get the next object */
             cnt = 1;
-            rc = PMIx_Data_unpack(NULL, buf, &infostat, &cnt, PMIX_INFO);
+            rc = PMIx_Data_unpack(NULL, &ctrlbuf, &infostat, &cnt, PMIX_INFO);
         }
-        /* restore the unpack location as the last unsuccessful attempt will
-         * have moved it */
-        buf->unpack_ptr = payload;
+        /* the unpacking loop will have ended when the unpack
+         * went past the end of the buffer */
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
 
         /* create space for the info array that will be passed down */
         PMIX_INFO_CREATE(info, ninfo);
@@ -1033,17 +1036,11 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             PMIX_INFO_LOAD(&info[n], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_UINT32);
             ++n;
         }
-#ifdef PMIX_SIZE_ESTIMATE
-        if (0 < memsize) {
-            PMIX_INFO_LOAD(&info[n], PMIX_SIZE_ESTIMATE, &memsize, PMIX_SIZE);
-        }
-#endif
 
         /* there is a byte object for each proc in the connect operation */
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, buf, &nspace, &cnt, PMIX_PROC_NSPACE);
         while (PMIX_SUCCESS == rc) {
-            ++n;
            /* unpack the proc data for this entry */
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, buf, &info[0], &cnt, PMIX_INFO);
@@ -1052,7 +1049,8 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
                 goto next;
             }
             if (first) {
-                cnt = 2;
+                /* only pass the metadata once */
+                cnt = n;
                 first = false;
             } else {
                 cnt = 1;
@@ -1082,9 +1080,13 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         PMIX_INFO_DESTRUCT(&info[1]);
     }
 
+done:
+    if (PMIX_SUCCESS == rc) {
+        rc = status;
+    }
     /* now release the connect call */
     if (NULL != md->opcbfunc) {
-        md->opcbfunc(status, md->cbdata);
+        md->opcbfunc(rc, md->cbdata);
     }
 
     PMIX_RELEASE(md);
@@ -1102,10 +1104,11 @@ int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
     pmix_value_t *val;
     pmix_info_t info[2], *isrc, *idest, procdata;
     prte_proc_t *proc;
-    pmix_data_array_t *darray;
+    pmix_data_array_t *darray, dxfer;
     pmix_scope_t scope;
+    void *endpt, *entry;
 
-    /* at some point, we need to add bookeeping to track which
+    /* at some point, we need to add bookkeeping to track which
      * procs are "connected" so we know who to notify upon
      * termination or failure. For now, we have to ensure
      * that we have registered all participating nspaces so
@@ -1113,6 +1116,9 @@ int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
      * Otherwise, the client will receive an error as it won't
      * be able to resolve any of the required data for the
      * missing nspaces */
+
+    /* setup to track endpt data */
+    PMIX_INFO_LIST_START(endpt);
 
     /* cycle thru the procs */
     PMIX_INFO_LOAD(&info[0], PMIX_OPTIONAL, NULL, PMIX_BOOL);
@@ -1135,9 +1141,10 @@ int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
             PMIX_INFO_CREATE(cd->directives, cd->ndirs);
             uid = geteuid();
             PMIX_INFO_LOAD(&cd->directives[0], PMIX_USERID, &uid, PMIX_UINT32);
-            if (PRTE_SUCCESS
-                != (rc = pmix_server_lookup_fn(&cd->procs[n], keys, cd->directives, cd->ndirs,
-                                               _cnlk, cd))) {
+            rc = pmix_server_lookup_fn(&cd->procs[n], keys,
+                                       cd->directives, cd->ndirs,
+                                       _cnlk, cd);
+            if (PMIX_SUCCESS != rc) {
                 PMIX_ARGV_FREE_COMPAT(keys);
                 PMIX_INFO_FREE(cd->directives, cd->ndirs);
                 return rc;
@@ -1175,12 +1182,14 @@ int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
                  * get a "not found" response - this is okay */
                 continue;
             }
-            /* we should have received a data array containing all the requested info */
-            /* first pack the nspace */
-            rc = PMIx_Data_pack(NULL, dbuf, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+            PMIX_INFO_LIST_START(entry);
+            /* start with the nspace */
+            PMIX_INFO_LIST_ADD(rc, entry, PMIX_NSPACE, jdata->nspace, PMIX_PROC_NSPACE);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_VALUE_RELEASE(val);
+                PMIX_INFO_LIST_RELEASE(entry);
+                PMIX_INFO_LIST_RELEASE(endpt);
                 return rc;
             }
             /* transfer the returned data to a data array suitable for PMIX_PROC_DATA */
@@ -1196,16 +1205,34 @@ int prte_pmix_connection_info(prte_pmix_server_op_caddy_t *cd,
             }
             PMIX_VALUE_RELEASE(val);
             /* load the proc_data info */
-            PMIX_INFO_LOAD(&procdata, PMIX_PROC_DATA, darray, PMIX_DATA_ARRAY);
-            /* now pack it */
-            rc = PMIx_Data_pack(NULL, dbuf, &procdata, 1, PMIX_INFO);
+            PMIX_INFO_LIST_ADD(rc, entry, PMIX_PROC_DATA, darray, PMIX_DATA_ARRAY);
+            /* convert the entry to a data array */
+            PMIX_INFO_LIST_CONVERT(rc, entry, &dxfer);
+            PMIX_INFO_LIST_RELEASE(entry);
+            /* now add this to the overall list */
+            PMIX_INFO_LIST_ADD(rc, endpt, PMIX_GROUP_ENDPT_DATA, &dxfer, PMIX_DATA_ARRAY);
+            PMIX_DATA_ARRAY_DESTRUCT(&dxfer);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                return rc;
+                PMIX_VALUE_RELEASE(val);
+                PMIX_INFO_LIST_RELEASE(endpt);
+                return prte_pmix_convert_rc(rc);
             }
-       }
+        }
     }
-    return PRTE_SUCCESS;
+    /* if the endpt list has any data in it, then we
+     * need to pack it into the buffer */
+    PMIX_INFO_LIST_CONVERT(rc, endpt, &dxfer);
+    PMIX_INFO_LIST_RELEASE(endpt);
+    if (0 < dxfer.size) {
+        PMIX_INFO_LOAD(&procdata, PMIX_GROUP_ENDPT_DATA, &dxfer, PMIX_DATA_ARRAY);
+        PMIX_DATA_ARRAY_DESTRUCT(&dxfer);
+        rc = PMIx_Data_pack(NULL, dbuf, &procdata, 1, PMIX_INFO);
+        PMIX_INFO_DESTRUCT(&procdata);
+        rc = prte_pmix_convert_rc(rc);
+    }
+    PMIX_INFO_LIST_RELEASE(endpt);
+    return rc;
 }
 
 static void _cnct(int sd, short args, void *cbdata)

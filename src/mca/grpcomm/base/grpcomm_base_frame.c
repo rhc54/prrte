@@ -147,6 +147,7 @@ static void ccon(prte_grpcomm_coll_t *p)
     p->assignID = false;
     p->timeout = 0;
     p->memsize = 0;
+    p->nkeys = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
     p->buffers = NULL;

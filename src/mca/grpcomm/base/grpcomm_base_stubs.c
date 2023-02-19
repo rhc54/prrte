@@ -462,18 +462,18 @@ int prte_pack_ctrl_options(pmix_byte_object_t *ctrlsbo,
     pmix_data_buffer_t ctrlbuf;
     pmix_status_t rc;
 
-    PMIx_Data_buffer_construct(&ctrlbuf);
+    PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
     rc = PMIx_Data_pack(NULL, &ctrlbuf, &ninfo, 1, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIx_Data_buffer_destruct(&ctrlbuf);
+        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
         return rc;
     }
     if (0 < ninfo) {
         rc = PMIx_Data_pack(NULL, &ctrlbuf, (void*)info, ninfo, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIx_Data_buffer_destruct(&ctrlbuf);
+            PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
             return rc;
         }
     }
@@ -483,9 +483,9 @@ int prte_pack_ctrl_options(pmix_byte_object_t *ctrlsbo,
     rc = PMIx_Data_unload(&ctrlbuf, ctrlsbo);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIx_Data_buffer_destruct(&ctrlbuf);
+        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
         return rc;
     }
-    PMIx_Data_buffer_destruct(&ctrlbuf);
+    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
     return PRTE_SUCCESS;
 }

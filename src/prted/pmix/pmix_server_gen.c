@@ -936,12 +936,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     size_t n;
     pmix_info_t info;
     pmix_byte_object_t bo;
-    int32_t byused;
-#ifdef PMIX_SIZE_ESTIMATE
-    bool gotestimate = false;
-    size_t memsize = 0;
-#endif
-    char *payload;
+    pmix_data_buffer_t ctrlbuf;
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -954,73 +949,65 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         goto complete;
     }
 
-    /* check for any directives */
-    cd->ninfo = 0;
-    payload = buf->unpack_ptr;
+    /* unpack the control byte object */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buf, &info, &cnt, PMIX_INFO);
+    rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto complete;
+    }
+    PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
+    rc = PMIx_Data_load(&ctrlbuf, &bo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        goto complete;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+
+    /* should be empty, but be safe here */
+    if (NULL != cd->info) {
+        PMIX_INFO_FREE(cd->info, cd->ninfo);
+    }
+    cd->ninfo = 0;
+
+    /* check for any directives */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, &ctrlbuf, &info, &cnt, PMIX_INFO);
     while (PMIX_SUCCESS == rc) {
         if (PMIX_CHECK_KEY(&info, PMIX_GROUP_CONTEXT_ID)) {
             PMIX_VALUE_GET_NUMBER(rc, &info.value, cid, uint32_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                cd->ninfo = 0;
-                goto complete;
+                PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+               goto complete;
             }
             assignedID = true;
             cd->ninfo++;
-#ifdef PMIX_SIZE_ESTIMATE
-        } else if (PMIX_CHECK_KEY(&info, PMIX_SIZE_ESTIMATE)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info.value, memsize, size_t);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                cd->ninfo = 0;
-                goto complete;
-            }
-            gotestimate = true;
-            cd->ninfo++;
-#endif
         }
-        /* save where we are */
-        payload = buf->unpack_ptr;
-        /* cleanup */
-        PMIX_INFO_DESTRUCT(&info);
         /* get the next object */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, buf, &info, &cnt, PMIX_INFO);
+        rc = PMIx_Data_unpack(NULL, &ctrlbuf, &info, &cnt, PMIX_INFO);
     }
-    /* restore the unpack location as the last unsuccessful attempt will
-     * have moved it */
-    buf->unpack_ptr = payload;
-    /* the unpacking loop will have ended when the unpack either
-     * went past the end of the buffer OR it attempted to unpack
-     * the wrong type - so correct the error status here */
-    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc ||
-        PMIX_ERR_PACK_MISMATCH == rc) {
-        rc = PMIX_SUCCESS;
+    /* the unpacking loop will have ended when the unpack
+     * went past the end of the buffer */
+    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+        PMIX_ERROR_LOG(rc);
     }
+    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
 
     /* if anything is left in the buffer, then it is
      * modex data that needs to be stored */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    byused = buf->bytes_used - (buf->unpack_ptr - buf->base_ptr);
-    if (0 < byused) {
+    bo.size = buf->bytes_used - (buf->unpack_ptr - buf->base_ptr);
+    if (0 < bo.size) {
+        pmix_output(0, "GRPRELEASE HAS %d BYTES LEFT", (int)bo.size);
         bo.bytes = buf->unpack_ptr;
-        bo.size = byused;
-    }
-    if (NULL != bo.bytes && 0 < bo.size) {
         cd->ninfo++;
     }
 
     if (0 < cd->ninfo) {
         PMIX_INFO_CREATE(cd->info, cd->ninfo);
         n = 0;
-#ifdef PMIX_SIZE_ESTIMATE
-        if (gotestimate) {
-            PMIX_INFO_LOAD(&cd->info[n], PMIX_SIZE_ESTIMATE, &memsize, PMIX_SIZE);
-            ++n;
-        }
-#endif
         if (assignedID) {
             PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_UINT32);
             ++n;
@@ -1043,20 +1030,17 @@ complete:
     }
 }
 
-pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
-                                   const pmix_proc_t procs[], size_t nprocs,
-                                   const pmix_info_t directives[], size_t ndirs,
-                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
+static void _grpop(int sd, short args, void *cbdata)
 {
+    prte_pmix_server_op_caddy_t *scd = (prte_pmix_server_op_caddy_t*)cbdata;
     prte_pmix_mdx_caddy_t *cd;
-    prte_pmix_server_op_caddy_t scd;
     int rc;
     size_t i;
     bool assignID = false;
     pmix_server_pset_t *pset;
     bool fence = false;
     bool force_local = false;
-    pmix_byte_object_t *bo = NULL;
+    size_t grpinfoindex = SIZE_MAX;
     pmix_data_buffer_t dbuf;
     struct timeval tv = {0, 0};
 
@@ -1064,46 +1048,46 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                         "%s group request recvd",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* they are required to pass us an id */
-    if (NULL == gpid) {
-        return PMIX_ERR_BAD_PARAM;
-    }
-
     /* check the directives */
-    for (i = 0; i < ndirs; i++) {
+    for (i = 0; i < scd->ndirs; i++) {
         /* see if they want a context id assigned */
-        if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
-            assignID = PMIX_INFO_TRUE(&directives[i]);
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
-            fence = PMIX_INFO_TRUE(&directives[i]);
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
-            bo = (pmix_byte_object_t *) &directives[i].value.data.bo;
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
-            tv.tv_sec = directives[i].value.data.uint32;
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
-            force_local = PMIX_INFO_TRUE(&directives[i]);
+        if (PMIX_CHECK_KEY(&scd->directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
+            assignID = PMIX_INFO_TRUE(&scd->directives[i]);
+        } else if (PMIX_CHECK_KEY(&scd->directives[i], PMIX_EMBED_BARRIER)) {
+            fence = PMIX_INFO_TRUE(&scd->directives[i]);
+        } else if (PMIX_CHECK_KEY(&scd->directives[i], PMIX_GROUP_INFO)) {
+            grpinfoindex = i;
+        } else if (PMIX_CHECK_KEY(&scd->directives[i], PMIX_TIMEOUT)) {
+            tv.tv_sec = scd->directives[i].value.data.uint32;
+        } else if (PMIX_CHECK_KEY(&scd->directives[i], PMIX_GROUP_LOCAL_ONLY)) {
+            force_local = PMIX_INFO_TRUE(&scd->directives[i]);
         }
     }
 
-    if (PMIX_GROUP_CONSTRUCT == op) {
+    if (PMIX_GROUP_CONSTRUCT == scd->ncodes) {
         /* add it to our list of known groups */
         pset = PMIX_NEW(pmix_server_pset_t);
-        pset->name = strdup(gpid);
-        pset->num_members = nprocs;
+        pset->name = strdup(scd->msg);
+        pset->num_members = scd->nprocs;
         PMIX_PROC_CREATE(pset->members, pset->num_members);
-        memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
+        memcpy(pset->members, scd->procs, scd->nprocs * sizeof(pmix_proc_t));
         pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
-    } else if (PMIX_GROUP_DESTRUCT == op) {
+    } else if (PMIX_GROUP_DESTRUCT == scd->ncodes) {
         /* find this group ID on our list of groups */
         PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
         {
-            if (0 == strcmp(pset->name, gpid)) {
+            if (0 == strcmp(pset->name, scd->msg)) {
                 pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
                 PMIX_RELEASE(pset);
                 break;
             }
         }
     }
+
+    cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
+    cd->grpcbfunc = group_release;
+    cd->infocbfunc = scd->infocbfunc;
+    cd->cbdata = scd->cbdata;
 
     /* if they don't want us to do a fence and they don't want a
      * context id assigned, or they insist on forcing local
@@ -1112,53 +1096,108 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s group request - purely local",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        return PMIX_OPERATION_SUCCEEDED;
+        if (NULL != cd->infocbfunc) {
+            if (PMIX_GROUP_CONSTRUCT == scd->ncodes) {
+                PMIX_INFO_CREATE(cd->info, 1);
+                PMIX_LOAD_KEY(cd->info[0].key, PMIX_GROUP_MEMBERSHIP);
+                PMIX_DATA_ARRAY_CREATE(cd->info[0].value.data.darray, scd->nprocs, PMIX_PROC);
+                memcpy(cd->info[0].value.data.darray->array, scd->procs, scd->nprocs * sizeof(pmix_proc_t));
+                cd->infocbfunc(PMIX_SUCCESS, cd->info, 1, cd->cbdata, relcb, cd);
+            } else {
+                cd->infocbfunc(PMIX_SUCCESS, NULL, 0, cd->cbdata, relcb, cd);
+            }
+            PMIX_RELEASE(scd);
+        } else {
+            PMIX_RELEASE(scd);
+            PMIX_RELEASE(cd);
+        }
+        return;
     }
-
-    cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
-    cd->grpcbfunc = group_release;
-    cd->infocbfunc = cbfunc;
-    cd->cbdata = cbdata;
 
     /* compute the signature of this collective */
-    if (NULL != procs) {
+    if (NULL != scd->procs) {
         cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
-        cd->sig->sz = nprocs;
+        cd->sig->sz = scd->nprocs;
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
-        memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
+        memcpy(cd->sig->signature, scd->procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
     /* setup the ctrls blob */
-    rc = prte_pack_ctrl_options(&cd->ctrls, directives, ndirs);
+    rc = prte_pack_ctrl_options(&cd->ctrls, scd->directives, scd->ndirs);
     if (PMIX_SUCCESS != rc) {
-        PMIX_RELEASE(cd);
-        return rc;
+        PMIX_RELEASE(scd);
+        if (NULL != cd->infocbfunc) {
+            cd->infocbfunc(rc, NULL, 0, cd->cbdata, relcb, cd);
+        } else {
+            PMIX_RELEASE(cd);
+        }
+        return;
     }
 
     /* collect the local connection info */
     PMIX_DATA_BUFFER_CREATE(cd->buf);
-    PMIX_CONSTRUCT(&scd, prte_pmix_server_op_caddy_t);
-    scd.procs = (pmix_proc_t*)procs;
-    scd.nprocs = nprocs;
-    rc = prte_pmix_connection_info(&scd, cd->buf);
-    scd.procs = NULL;
-    scd.nprocs = 0;
-    PMIX_DESTRUCT(&scd);
+    rc = prte_pmix_connection_info(scd, cd->buf);
+
+    /* done with scd */
+    PMIX_RELEASE(scd);
 
     /* if they provided us with a data blob, send it along too */
-    if (NULL != bo) {
-        dbuf.base_ptr = bo->bytes;
-        dbuf.pack_ptr = ((char *) dbuf.base_ptr) + bo->size;
-        dbuf.unpack_ptr = dbuf.base_ptr;
-        dbuf.bytes_used = bo->size;
-        dbuf.bytes_allocated = dbuf.bytes_used;
-        rc = PMIx_Data_copy_payload(cd->buf, &dbuf);
+    if (SIZE_MAX != grpinfoindex) {
+        rc = PMIx_Data_pack(NULL, cd->buf, &scd->directives[grpinfoindex], 1, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (NULL != cd->infocbfunc) {
+                cd->infocbfunc(rc, NULL, 0, cd->cbdata, relcb, cd);
+            } else {
+                PMIX_RELEASE(cd);
+            }
+            return;
+        }
     }
+
     /* pass it to the global collective algorithm */
     if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(cd);
-        return PMIX_ERROR;
+        if (NULL != cd->infocbfunc) {
+            cd->infocbfunc(PMIX_ERROR, NULL, 0, cd->cbdata, relcb, cd);
+        } else {
+            PMIX_RELEASE(cd);
+        }
+        return;
     }
+    return;
+}
+
+pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
+                                   const pmix_proc_t procs[], size_t nprocs,
+                                   const pmix_info_t directives[], size_t ndirs,
+                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s GROUP REQUEST RECVD",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+    /* they are required to pass us an id */
+    if (NULL == gpid) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+
+    /* need to threadshift this request */
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    cd->ncodes = op;
+    cd->msg = gpid;
+    cd->procs = (pmix_proc_t*)procs;
+    cd->nprocs = nprocs;
+    cd->directives = (pmix_info_t*)directives;
+    cd->ndirs = ndirs;
+    cd->infocbfunc = cbfunc;
+    cd->cbdata = cbdata;
+
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _grpop, cd);
+    prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PMIX_SUCCESS;
 }
 

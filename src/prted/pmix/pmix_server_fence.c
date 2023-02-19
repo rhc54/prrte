@@ -60,8 +60,18 @@ static void pmix_server_release(int status, pmix_data_buffer_t *buf, void *cbdat
     prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
     pmix_byte_object_t bo;
     int rc = PRTE_SUCCESS;
+    int32_t cnt;
 
     PMIX_ACQUIRE_OBJECT(cd);
+
+    /* unpack the control byte object and discard it */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto complete;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
     /* unload the buffer */
     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
@@ -71,6 +81,8 @@ static void pmix_server_release(int status, pmix_data_buffer_t *buf, void *cbdat
     if (PRTE_SUCCESS == rc) {
         rc = status;
     }
+
+complete:
     cd->mdxcbfunc(rc, bo.bytes, bo.size, cd->cbdata, relcb, bo.bytes);
     PMIX_RELEASE(cd);
 }

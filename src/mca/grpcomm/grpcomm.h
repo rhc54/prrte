@@ -91,6 +91,7 @@ typedef struct {
     bool assignID;
     int timeout;
     size_t memsize;
+    size_t nkeys;
     /* distance masks for receive */
     pmix_bitmap_t distance_mask_recv;
     /* received buckets */
