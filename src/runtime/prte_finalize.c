@@ -70,6 +70,23 @@ int prte_finalize(void)
     /* release the cache */
     PMIX_RELEASE(prte_cache);
 
+    /* Release the sessions */
+    {
+        prte_session_t *session;
+        for (n = 0; n < prte_job_data->size; n++) {
+            session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, n);
+            if (NULL == session) {
+                continue;
+            }
+            /* need to protect the global node pool */
+            if(session == prte_default_session){
+                session->nodes = NULL;
+            }
+            PMIX_RELEASE(session);
+        }
+    }
+    PMIX_RELEASE(prte_sessions);
+
     /* Release the job hash table
      *
      * There is the potential for a prte_job_t object to still be in the
