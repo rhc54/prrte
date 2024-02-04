@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -149,8 +149,8 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
      */
     if (!prte_managed_allocation || prte_set_slots_override) {
         caddy->jdata->total_slots_alloc = 0;
-        for (i = 0; i < prte_node_pool->size; i++) {
-            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        for (i = 0; i < caddy->jdata->session->nodes->size; i++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(caddy->jdata->session->nodes, i);
             if (NULL == node) {
                 continue;
             }

@@ -205,9 +205,11 @@ static void interim(int sd, short args, void *cbdata)
     pmix_info_t *info;
     int rc, i;
     char cwd[PRTE_PATH_MAX];
+    char *endptr;
     bool flag;
     size_t m, n;
     uint16_t u16;
+    uint32_t u32;
     pmix_rank_t rank;
     prte_rmaps_options_t options;
     prte_schizo_base_module_t *schizo;
@@ -265,6 +267,7 @@ static void interim(int sd, short args, void *cbdata)
             app->cwd = strdup(papp->cwd);
         }
         app->num_procs = papp->maxprocs;
+
         if (NULL != papp->info) {
             for (m = 0; m < papp->ninfo; m++) {
                 info = &papp->info[m];
@@ -385,6 +388,21 @@ static void interim(int sd, short args, void *cbdata)
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
+            /***   ALLOC/SESSION IDs  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_ID)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u32, uint32_t);
+            if (PMIX_SUCCESS != rc) {
+                goto complete;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
+                               PRTE_ATTR_GLOBAL, &u32, PMIX_UINT32);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_REQ_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REF_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {

@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -308,6 +308,23 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         error = "setup node array";
         goto error;
     }
+    prte_sessions = PMIX_NEW(pmix_pointer_array_t);
+    ret = pmix_pointer_array_init(prte_sessions,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        error = "setup session array";
+        goto error;
+    }
+    /* Create a session object for the DVM and let it point to the node pool */
+    prte_default_session = PMIX_NEW(prte_session_t);
+    prte_default_session->session_id = 0;
+    PMIX_RELEASE(prte_default_session->nodes);
+    prte_default_session->nodes = prte_node_pool;
+    prte_set_session_object(prte_default_session);
+
     prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
     ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                   PRTE_GLOBAL_ARRAY_MAX_SIZE,

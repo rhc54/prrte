@@ -15,7 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -975,6 +975,7 @@ proceed:
                         node = PMIX_NEW(prte_node_t);
                         node->name = strdup(cptr);
                         node->slots = slots;
+                        node->state = PRTE_NODE_STATE_ADDED;
                         pmix_list_append(&nodes, &node->super);
                     }
                     free(line);
