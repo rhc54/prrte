@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -244,6 +244,7 @@ static void interim(int sd, short args, void *cbdata)
     for (n = 0; n < cd->napps; n++) {
         papp = &cd->apps[n];
         app = PMIX_NEW(prte_app_context_t);
+        app->job = (struct prte_job_t*)jdata;
         app->idx = pmix_pointer_array_add(jdata->apps, app);
         jdata->num_apps++;
         if (NULL != papp->cmd) {
@@ -388,12 +389,21 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
-            /***   ALLOC ID   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
-            
-            u32 = strtoul(info->value.data.string, &endptr, 10);
+            /***   ALLOC/SESSION IDs  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_ID)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u32, uint32_t);
+            if (PMIX_SUCCESS != rc) {
+                goto complete;
+            }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
                                PRTE_ATTR_GLOBAL, &u32, PMIX_UINT32);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_REQ_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REF_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             flag = PMIX_INFO_TRUE(info);

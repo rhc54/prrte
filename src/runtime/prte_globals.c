@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,11 +43,14 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml.h"
+#include "src/mca/state/state.h"
+
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
@@ -266,15 +269,66 @@ prte_session_t *prte_get_session_object(const uint32_t session_id)
     if (NULL == prte_sessions) {
         return NULL;
     }
-    /* if the nspace is invalid, then reject it */
-    if (session_id == UINT32_MAX) {
+    /* if the session ID is invalid, then reject it */
+    if (UINT32_MAX == session_id) {
         return NULL;
     }
     for (i = 0; i < prte_sessions->size; i++) {
-        if (NULL == (session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i))) {
+        session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == session) {
             continue;
         }
         if (session->session_id == session_id) {
+            return session;
+        }
+    }
+    return NULL;
+}
+
+prte_session_t *prte_get_session_object_from_id(const char *id)
+{
+    prte_session_t *session;
+    int i;
+
+    /* if the job data wasn't setup, we cannot provide the data */
+    if (NULL == prte_sessions) {
+        return NULL;
+    }
+    /* if the session ID is invalid, then reject it */
+    if (NULL == id) {
+        return NULL;
+    }
+    for (i = 0; i < prte_sessions->size; i++) {
+        session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == session) {
+            continue;
+        }
+        if (0 == strcasecmp(session->alloc_refid, id)) {
+            return session;
+        }
+    }
+    return NULL;
+}
+
+prte_session_t *prte_get_session_object_from_refid(const char *refid)
+{
+    prte_session_t *session;
+    int i;
+
+    /* if the job data wasn't setup, we cannot provide the data */
+    if (NULL == prte_sessions) {
+        return NULL;
+    }
+    /* if the session ID is invalid, then reject it */
+    if (NULL == refid) {
+        return NULL;
+    }
+    for (i = 0; i < prte_sessions->size; i++) {
+        session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == session) {
+            continue;
+        }
+        if (0 == strcasecmp(session->user_refid, refid)) {
             return session;
         }
     }
@@ -296,7 +350,8 @@ int prte_set_session_object(prte_session_t *session)
     }
     /* verify that we don't already have this object */
     for (i = 0; i < prte_sessions->size; i++) {
-        if (NULL == (session_ptr = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i))) {
+        session_ptr = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == session_ptr) {
             if (0 > save) {
                 save = i;
             }
@@ -326,9 +381,10 @@ bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2){
         return true;
     }
 
-    for(n = 0; n < session1->children->size; n++){
-        if(NULL != (session_ptr = (prte_session_t *) pmix_pointer_array_get_item(session1->children, n))){
-            if(session_ptr->session_id == session2->session_id){
+    for (n = 0; n < session1->children->size; n++){
+        session_ptr = (prte_session_t *) pmix_pointer_array_get_item(session1->children, n);
+        if (NULL != session_ptr) {
+            if (session_ptr->session_id == session2->session_id) {
                 return true;
             }
         }
@@ -486,6 +542,7 @@ bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
 
 static void prte_app_context_construct(prte_app_context_t *app_context)
 {
+    app_context->job = NULL;
     app_context->idx = 0;
     app_context->app = NULL;
     app_context->num_procs = 0;
@@ -548,6 +605,7 @@ static void prte_job_construct(prte_job_t *job)
     job->personality = NULL;
     job->schizo = NULL;
     PMIX_LOAD_NSPACE(job->nspace, NULL);
+    job->session_dir = NULL;
     job->index = -1;
     job->offset = 0;
     job->apps = PMIX_NEW(pmix_pointer_array_t);
@@ -599,14 +657,10 @@ static void prte_job_destruct(prte_job_t *job)
         return;
     }
 
-    if (prte_debug_flag) {
-        pmix_output(0, "%s Releasing job data for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    PRTE_JOBID_PRINT(job->nspace));
-    }
-
     if (NULL != job->personality) {
         PMIX_ARGV_FREE_COMPAT(job->personality);
     }
+
     for (n = 0; n < job->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, n))) {
             continue;
@@ -651,6 +705,7 @@ static void prte_job_destruct(prte_job_t *job)
         if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, n))) {
             continue;
         }
+        pmix_pointer_array_set_item(job->procs, n, NULL);
         PMIX_RELEASE(proc);
     }
     PMIX_RELEASE(job->procs);
@@ -667,6 +722,14 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     PMIX_LIST_DESTRUCT(&job->children);
+
+    if (NULL != job->session_dir) {
+        prte_job_session_dir_finalize(job);
+        if (NULL != job->session_dir) {
+            free(job->session_dir);
+            job->session_dir = NULL;
+        }
+    }
 
     if (NULL != prte_job_data && 0 <= job->index) {
         /* remove the job from the global array */
@@ -752,13 +815,12 @@ static void prte_node_destruct(prte_node_t *node)
     PMIX_LIST_DESTRUCT(&node->attributes);
 }
 
-PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t, prte_node_construct, prte_node_destruct);
+PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t,
+                    prte_node_construct, prte_node_destruct);
 
 static void prte_proc_construct(prte_proc_t *proc)
 {
     proc->name = *PRTE_NAME_INVALID;
-    proc->job = NULL;
-    proc->rank = PMIX_RANK_INVALID;
     proc->parent = PMIX_RANK_INVALID;
     proc->pid = 0;
     proc->local_rank = PRTE_LOCAL_RANK_INVALID;
@@ -795,7 +857,8 @@ static void prte_proc_destruct(prte_proc_t *proc)
     PMIX_LIST_DESTRUCT(&proc->attributes);
 }
 
-PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t, prte_proc_construct, prte_proc_destruct);
+PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t,
+                    prte_proc_construct, prte_proc_destruct);
 
 static void prte_job_map_construct(prte_job_map_t *map)
 {
@@ -833,7 +896,8 @@ static void prte_job_map_destruct(prte_job_map_t *map)
     PMIX_RELEASE(map->nodes);
 }
 
-PMIX_CLASS_INSTANCE(prte_job_map_t, pmix_object_t, prte_job_map_construct, prte_job_map_destruct);
+PMIX_CLASS_INSTANCE(prte_job_map_t, pmix_object_t,
+                    prte_job_map_construct, prte_job_map_destruct);
 
 static void prte_attr_cons(prte_attribute_t *p)
 {
@@ -845,7 +909,8 @@ static void prte_attr_des(prte_attribute_t *p)
 {
     PMIX_VALUE_DESTRUCT(&p->data);
 }
-PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t, prte_attr_cons, prte_attr_des);
+PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t,
+                    prte_attr_cons, prte_attr_des);
 
 static void tcon(prte_topology_t *t)
 {
@@ -861,28 +926,71 @@ static void tdes(prte_topology_t *t)
         free(t->sig);
     }
 }
-PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t, tcon, tdes);
+PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t,
+                    tcon, tdes);
 
 static void session_con(prte_session_t *s)
 {
     s->session_id = UINT32_MAX;
+    s->user_refid = NULL;
+    s->alloc_refid = NULL;
     s->nodes = PMIX_NEW(pmix_pointer_array_t);
-    pmix_pointer_array_init(s->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                        PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    pmix_pointer_array_init(s->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                            PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     s->jobs = PMIX_NEW(pmix_pointer_array_t);
-    pmix_pointer_array_init(s->jobs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                        PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    pmix_pointer_array_init(s->jobs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                            PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     s->children = PMIX_NEW(pmix_pointer_array_t);
-    pmix_pointer_array_init(s->children, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                    PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    pmix_pointer_array_init(s->children, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                            PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
 }
 static void session_des(prte_session_t *s)
 {
+    int n;
+    prte_node_t *nd;
+    prte_job_t *job;
+    prte_session_t *session;
+
+    if (NULL != s->user_refid) {
+        free(s->user_refid);
+    }
+    if (NULL != s->alloc_refid) {
+        free(s->alloc_refid);
+    }
+
+    for (n=0; n < s->nodes->size; s++) {
+        nd = (prte_node_t*)pmix_pointer_array_get_item(s->nodes, n);
+        if (NULL != nd) {
+            PMIX_RELEASE(nd);
+            pmix_pointer_array_set_item(s->nodes, n, NULL);
+        }
+    }
     PMIX_RELEASE(s->nodes);
+
+    for (n=0; n < s->jobs->size; s++) {
+        job = (prte_job_t*)pmix_pointer_array_get_item(s->jobs, n);
+        if (NULL != job) {
+            PMIX_RELEASE(job);
+            pmix_pointer_array_set_item(s->jobs, n, NULL);
+        }
+    }
     PMIX_RELEASE(s->jobs);
+
+    for (n=0; n < s->children->size; s++) {
+        session = (prte_session_t*)pmix_pointer_array_get_item(s->children, n);
+        if (NULL != session) {
+            PMIX_RELEASE(session);
+            pmix_pointer_array_set_item(s->children, n, NULL);
+        }
+    }
     PMIX_RELEASE(s->children);
 }
-PMIX_CLASS_INSTANCE(prte_session_t, pmix_list_item_t, session_con, session_des);
+PMIX_CLASS_INSTANCE(prte_session_t,
+                    pmix_list_item_t,
+                    session_con, session_des);
 
 #if PRTE_PICKY_COMPILERS
 void prte_hide_unused_params(int x, ...)

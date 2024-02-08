@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -402,6 +402,7 @@ static struct option prtedoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_TEST_SUICIDE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_BOOTSTRAP, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };

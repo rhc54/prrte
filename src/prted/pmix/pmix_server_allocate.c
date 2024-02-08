@@ -270,9 +270,13 @@ static void pass_request(int sd, short args, void *cbdata)
 
     /* create a request tracker for this operation */
     req = PMIX_NEW(pmix_server_req_t);
-    pmix_asprintf(&req->operation, "SESSIONCTRL: %u", cd->sessionID);
-    command = 1;
-
+    if (0 < cd->allocdir) {
+        pmix_asprintf(&req->operation, "ALLOCATE: %u", cd->allocdir);
+        command = 0;
+    } else {
+        pmix_asprintf(&req->operation, "SESSIONCTRL: %u", cd->sessionID);
+        command = 1;
+    }
     req->infocbfunc = cd->infocbfunc;
     req->cbdata = cd->cbdata;
     /* add this request to our local request tracker array */
@@ -438,6 +442,37 @@ callback:
     PMIX_RELEASE(req);
 }
 
+
+/* this is the upcall from the PMIx server for the allocation
+ * request support. Since we are going to touch global structures
+ * (e.g., the session tracker pointer array), we have to threadshift
+ * this request into our own internal progress thread. Note that the
+ * allocation request could have come to this host from the
+ * scheduler, or a tool, or even an application process. */
+pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
+                                   pmix_alloc_directive_t directive,
+                                   const pmix_info_t data[], size_t ndata,
+                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd;
+
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s allocate upcalled on behalf of proc %s:%u with %" PRIsize_t " infos",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), client->nspace, client->rank, ndata);
+
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    PMIX_LOAD_PROCID(&cd->proc, client->nspace, client->rank);
+    cd->allocdir = directive;
+    cd->info = (pmix_info_t *) data;
+    cd->ninfo = ndata;
+    cd->infocbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, pass_request, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
+    return PRTE_SUCCESS;
+}
 
 #if PMIX_NUMERIC_VERSION >= 0x00050000
 

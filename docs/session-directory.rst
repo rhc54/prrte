@@ -8,17 +8,14 @@ daemon and its child processes.
 This is done to enable quick and easy cleanup in the event that PRRTE
 is unable to fully cleanup after itself.
 
+More detail on session directories is provided in the How Things Work
+:ref:`session directory <session-dir-detail-label>` section.
+
 Directory location
 ------------------
 
 PRRTE decides where to located the root of the session directory by
 examining the following (in precedence order):
-
-#. If the value of the ``prte_top_session_dir`` MCA parameter is not
-   empty, use that (it defaults to empty).
-
-   .. note:: MCA parameters can be set via environment variables, on
-             the command line, or in a parameter file.
 
 #. If the environment variable ``TMPDIR`` is not empty, use that.
 #. If the environment variable ``TEMP`` is not empty, use that.
@@ -32,17 +29,24 @@ By default, the session directory name is set to
 
 .. code::
 
-   prte.<nodename>.<uid>
+   <tool>.<nodename>.<pid>.<uid>
 
-The session directory name can further be altered to include the PID
-of the daemon process, if desired:
+where `tool` is the argv[0] of the process setting up the
+session directory. In most cases, this will be either `prte`,
+`prterun`, or `prted` - though special tools such as `psched`
+may also create a session directory tree.
 
-.. code::
+The session directory name includes the PID
+of the daemon process to allow a user to have multiple
+instances of a tool concurrently executing on a node.
 
-   prte.<nodename>.<pid>.<uid>
+.. note::
 
-by setting the ``prte_add_pid_to_session_dirname`` MCA parameter to a
-"true" value (e.g., 1).
+   Each tool will generate its own session directory tree. This
+   is done to avoid cleanup race conditions where one tool might
+   cleanup the session directory, and thereby remove the contact
+   information for a tool that is continuing to execute.
+
 
 Tools
 -----
