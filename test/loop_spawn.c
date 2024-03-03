@@ -176,18 +176,8 @@ int main(int argc, char **argv)
             PMIX_INFO_DESTRUCT(&iptr[0]);
             PMIX_INFO_DESTRUCT(&iptr[1]);
             PMIX_INFO_DESTRUCT(&iptr[2]);
-        }
 
-        PMIX_LOAD_PROCID(&procs[1], nspace, 0);
-        rc = PMIx_Connect(procs, 2, NULL, 0);
-        if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "[%s.%u]: Failed to connect\n", myproc.nspace, myproc.rank);
-            exit(1);
-        }
-
-        PMIx_Disconnect(procs, 2, NULL, 0);
-
-        if (sync) {
+            // wait for job termination
             DEBUG_WAIT_THREAD(&rellock);
             DEBUG_DESTRUCT_LOCK(&rellock);
         }

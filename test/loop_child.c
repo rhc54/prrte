@@ -14,7 +14,6 @@ int main( int argc, char **argv )
 {
     pmix_status_t rc;
     pmix_proc_t myproc;
-    pmix_proc_t procs[2];
     pmix_value_t *returnval;
     pmix_info_t info;
     static struct option myoptions[] = {{"verbose", no_argument, NULL, 'v'},
@@ -41,17 +40,6 @@ int main( int argc, char **argv )
         fprintf(stderr, "[%s.%u]: Unable to retrieve parent\n", myproc.nspace, myproc.rank);
         goto done;
     }
-    PMIX_XFER_PROCID(&procs[0], returnval->data.proc);
-    PMIX_VALUE_RELEASE(returnval);
-
-    PMIX_XFER_PROCID(&procs[1], &myproc);
-    rc = PMIx_Connect(procs, 2, NULL, 0);
-    if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "[%s.%u]: Failed to connect\n", myproc.nspace, myproc.rank);
-        exit(1);
-    }
-
-    PMIx_Disconnect(procs, 2, NULL, 0);
 
 done:
     PMIx_Finalize(NULL, 0);
