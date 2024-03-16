@@ -393,6 +393,10 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 
                 /* sort the procs so everyone gets the same order */
                 qsort(coll->sig->finalmembership, coll->sig->nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
+
+                /* collect the modex info for the final membership - we
+                 * should have a complete copy of it locally */
+
             }
 
             /* pack the signature */
