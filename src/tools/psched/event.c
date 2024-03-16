@@ -136,7 +136,6 @@ pmix_status_t psched_notify_event(pmix_status_t code, const pmix_proc_t *source,
                                   pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     int rc;
-    prte_grpcomm_signature_t *sig;
     pmix_data_buffer_t pbkt;
     pmix_status_t ret;
     size_t n;
@@ -217,29 +216,12 @@ pmix_status_t psched_notify_event(pmix_status_t code, const pmix_proc_t *source,
         }
     }
 
-    /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    if (NULL == sig) {
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return PMIX_ERR_NOMEM;
-    }
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    if (NULL == sig->signature) {
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        PMIX_RELEASE(sig);
-        return PMIX_ERR_NOMEM;
-    }
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    sig->sz = 1;
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        PMIX_RELEASE(sig);
         return PMIX_ERROR;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-    /* maintain accounting */
-    PMIX_RELEASE(sig);
 
 done:
     /* we do not need to execute a callback as we did this atomically */

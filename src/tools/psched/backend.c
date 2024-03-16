@@ -231,7 +231,6 @@ pmix_status_t psched_job_ctrl_fn(const pmix_proc_t *requestor,
     pmix_pointer_array_t parray, *ptrarray;
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t cmmnd;
-    prte_grpcomm_signature_t *sig;
     pmix_proc_t *proct;
     PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
 
@@ -289,15 +288,10 @@ pmix_status_t psched_job_ctrl_fn(const pmix_proc_t *requestor,
                     return rc;
                 }
                 /* goes to all daemons */
-                sig = PMIX_NEW(prte_grpcomm_signature_t);
-                sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-                sig->sz = 1;
-                PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-                if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, cmd))) {
+                if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, cmd))) {
                     PRTE_ERROR_LOG(rc);
                 }
                 PMIX_DATA_BUFFER_RELEASE(cmd);
-                PMIX_RELEASE(sig);
             }
         } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_SIGNAL, PMIX_MAX_KEYLEN)) {
             PMIX_DATA_BUFFER_CREATE(cmd);
@@ -335,11 +329,7 @@ pmix_status_t psched_job_ctrl_fn(const pmix_proc_t *requestor,
                 return rc;
             }
             /* goes to all daemons */
-            sig = PMIX_NEW(prte_grpcomm_signature_t);
-            sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-            sig->sz = 1;
-            PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, cmd))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, cmd))) {
                 PRTE_ERROR_LOG(rc);
             }
             PMIX_DATA_BUFFER_RELEASE(cmd);
