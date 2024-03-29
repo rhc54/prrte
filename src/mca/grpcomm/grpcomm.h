@@ -100,10 +100,8 @@ typedef struct {
     int timeout;
     size_t memsize;
     pmix_list_t addmembers;
-    /* distance masks for receive */
-    pmix_bitmap_t distance_mask_recv;
-    /* received buckets */
-    pmix_data_buffer_t **buffers;
+    pmix_list_t grpinfo;
+    pmix_list_t endpts;
     /* callback function */
     prte_grpcomm_cbfunc_t cbfunc;
     /* user-provided callback data */

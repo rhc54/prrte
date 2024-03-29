@@ -63,6 +63,40 @@ static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t 
 /* internal variables */
 static pmix_list_t tracker;
 
+/* internal classes */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_data_array_t blob;
+} grpcomm_darray_t;
+static void con(grpcomm_darray_t *p)
+{
+    p->blob.array = NULL;
+    p->blob.size = 0;
+}
+static void des(grpcomm_darray_t *p)
+{
+    PMIX_DATA_ARRAY_DESTRUCT(&p->blob);
+}
+PMIX_CLASS_INSTANCE(grpcomm_darray_t,
+                    pmix_list_item_t,
+                    con, des);
+
+typedef struct {
+    pmix_list_item_t super;
+    pmix_byte_object_t blob;
+} grpcomm_bo_t;
+static void bcon(grpcomm_bo_t *p)
+{
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->blob);
+}
+static void bdes(grpcomm_bo_t *p)
+{
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->blob);
+}
+PMIX_CLASS_INSTANCE(grpcomm_bo_t,
+                    pmix_list_item_t,
+                    bcon, bdes);
+
 /**
  * Initialize the module
  */
@@ -169,19 +203,22 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 {
     int32_t cnt;
     int rc, timeout;
-    size_t n, ninfo, m;
+    size_t n, ninfo, m, sz, nsz;
     bool assignID = false;
     bool found;
     pmix_list_t nmlist;
     prte_namelist_t *nm, *nm2;
     pmix_data_array_t darray;
     pmix_status_t st;
-    pmix_info_t *info, infostat;
+    pmix_info_t *info = NULL, infostat, *iptr, *gptr;
     prte_grpcomm_signature_t *sig = NULL;
     pmix_byte_object_t ctrlsbo;
     pmix_data_buffer_t ctrlbuf;
     pmix_data_buffer_t *reply;
+    pmix_data_buffer_t databuf;
     prte_grpcomm_coll_t *coll;
+    grpcomm_bo_t *g;
+    grpcomm_darray_t *dg;
     pmix_proc_t *addmembers;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -257,6 +294,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_INT;
             info[n].value.data.integer = coll->timeout;
+
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_LOCAL_COLLECTIVE_STATUS)) {
             PMIX_VALUE_GET_NUMBER(rc, &info[n].value, st, pmix_status_t);
             if (PMIX_SUCCESS != rc) {
@@ -271,6 +309,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_STATUS;
             info[n].value.data.status = coll->status;
+
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
             assignID = PMIX_INFO_TRUE(&info[n]);
             if (assignID) {
@@ -279,6 +318,26 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_BOOL;
             info[n].value.data.flag = coll->assignID;
+
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_INFO_ARRAY)) {
+            dg = PMIX_NEW(grpcomm_darray_t);
+            PMIX_DATA_ARRAY_CONSTRUCT(&dg->blob, info[n].value.data.darray->size, PMIX_INFO);
+            iptr = (pmix_info_t*)info[n].value.data.darray->array;
+            sz = info[n].value.data.darray->size;
+            gptr = (pmix_info_t*)dg->blob.array;
+            for (m=0; m < sz; m++) {
+                PMIX_INFO_XFER(&gptr[m], &iptr[m]);
+            }
+            pmix_list_append(&coll->grpinfo, &dg->super);
+
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ENDPT_DATA)) {
+            g = PMIX_NEW(grpcomm_bo_t);
+            g->blob.bytes = info[n].value.data.bo.bytes;
+            g->blob.size = info[n].value.data.bo.size;
+            pmix_list_append(&coll->endpts, &g->super);
+            // protect the data
+            info[n].value.data.bo.bytes = NULL;
+            info[n].value.data.bo.size = 0;
         }
     }
 
@@ -394,9 +453,6 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 /* sort the procs so everyone gets the same order */
                 qsort(coll->sig->finalmembership, coll->sig->nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
 
-                /* collect the modex info for the final membership - we
-                 * should have a complete copy of it locally */
-
             }
 
             /* pack the signature */
@@ -484,6 +540,61 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                         return;
                     }
                 }
+                /* collect the modex info for the final membership - we
+                 * should have a complete copy of it locally */
+                PMIX_DATA_BUFFER_CONSTRUCT(&databuf);
+                rc = PMIx_server_collect_proc_data(coll->sig->finalmembership, coll->sig->nfinal, &databuf);
+                if (PMIX_SUCCESS == rc) {
+                    PMIX_DATA_BUFFER_UNLOAD(&databuf, ctrlsbo.bytes, ctrlsbo.size);
+                    if (0 < ctrlsbo.size) {
+                        PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ENDPT_DATA, &ctrlsbo, PMIX_BYTE_OBJECT);
+                        rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                        PMIX_INFO_DESTRUCT(&infostat);
+                    }
+                    PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                        PMIX_RELEASE(sig);
+                        return;
+                    }
+                }
+                // provide any collected group info
+                sz = 0;
+                PMIX_LIST_FOREACH(dg, &coll->grpinfo, grpcomm_darray_t) {
+                    sz += dg->blob.size;
+                }
+                if (0 < sz) {
+                    // create the aggregated array
+                    PMIX_DATA_ARRAY_CONSTRUCT(&darray, sz, PMIX_INFO);
+                    iptr = (pmix_info_t*)darray.array;
+                    n = 0;
+                    PMIX_LIST_FOREACH(dg, &coll->grpinfo, grpcomm_darray_t) {
+                        gptr = (pmix_info_t*)dg->blob.array;
+                        // transfer the info to the new array
+                        for (m=0; m < dg->blob.size; m++) {
+                            PMIX_INFO_XFER(&iptr[n], &gptr[m]);
+                            ++n;
+                        }
+                    }
+                    // load into an info - avoid the PMIx copy routine as it
+                    // won't accept an array of arrays
+                    PMIx_Load_key(infostat.key, PMIX_GROUP_INFO_ARRAY);
+                    infostat.value.type = PMIX_DATA_ARRAY;
+                    infostat.value.data.darray = &darray;
+                    // pack the result
+                    rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                        PMIX_DATA_BUFFER_DESTRUCT(&databuf);
+                        PMIX_RELEASE(sig);
+                        return;
+                    }
+                }
             }
 
             // pack the ctrl object
@@ -497,6 +608,35 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_RELEASE(sig);
                 return;
             }
+
+            // pack any endpt data
+            PMIX_DATA_BUFFER_CONSTRUCT(&databuf);
+            PMIX_LIST_FOREACH(g, &coll->endpts, grpcomm_bo_t) {
+                rc = PMIx_Data_pack(NULL, &databuf, &g->blob, 1, PMIX_BYTE_OBJECT);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                    PMIX_DATA_BUFFER_DESTRUCT(&databuf);
+                    PMIX_RELEASE(sig);
+                    return;
+                }
+            }
+            PMIX_DATA_BUFFER_UNLOAD(&databuf, ctrlsbo.bytes, ctrlsbo.size);
+            if (0 < ctrlsbo.size) {
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ENDPT_DATA, &ctrlsbo, PMIX_BYTE_OBJECT);
+                rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                PMIX_INFO_DESTRUCT(&infostat);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+                    PMIX_RELEASE(sig);
+                    return;
+                }
+            }
+            PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
 
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
@@ -799,6 +939,7 @@ static void barrier_release(int status, pmix_proc_t *sender,
     int rc, ret;
     prte_grpcomm_signature_t *sig = NULL;
     prte_grpcomm_coll_t *coll;
+    prte_pmix_mdx_caddy_t *cd;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
@@ -825,6 +966,16 @@ static void barrier_release(int status, pmix_proc_t *sender,
      * found as that just means we are not involved
      * in the collective */
     if (NULL == (coll = prte_grpcomm_base_get_tracker(sig, false))) {
+        if (NULL != sig->addmembers) {
+            // if add_members are included here, then we need
+            // to ensure they are notified even if we were not
+            // involved in the initial collective as members
+            // from other nodes could be invited
+            cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
+            cd->op = PMIX_GROUP_CONSTRUCT;
+            cd->grpid = strdup(sig->groupID);
+            prte_pmix_group_release(ret, buffer, cd);
+        }
         PMIX_RELEASE(sig);
         return;
     }

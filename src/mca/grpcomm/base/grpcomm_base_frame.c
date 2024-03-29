@@ -169,9 +169,10 @@ static void ccon(prte_grpcomm_coll_t *p)
     p->timeout = 0;
     p->memsize = 0;
     PMIX_CONSTRUCT(&p->addmembers, pmix_list_t);
+    PMIX_CONSTRUCT(&p->grpinfo, pmix_list_t);
+    PMIX_CONSTRUCT(&p->endpts, pmix_list_t);
     p->cbfunc = NULL;
     p->cbdata = NULL;
-    p->buffers = NULL;
 }
 static void cdes(prte_grpcomm_coll_t *p)
 {
@@ -180,8 +181,9 @@ static void cdes(prte_grpcomm_coll_t *p)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
     PMIX_LIST_DESTRUCT(&p->addmembers);
+    PMIX_LIST_DESTRUCT(&p->grpinfo);
+    PMIX_LIST_DESTRUCT(&p->endpts);
     free(p->dmns);
-    free(p->buffers);
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t,
                     pmix_list_item_t,

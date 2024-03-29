@@ -67,19 +67,34 @@ static void relcb(void *cbdata)
     }
     PMIX_RELEASE(cd);
 }
-static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
+
+static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
+
+   if (NULL != cd->info) {
+        PMIX_INFO_FREE(cd->info, cd->ninfo);
+    }
+    PMIX_RELEASE(cd);
+}
+
+void prte_pmix_group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
+{
+    prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
+    prte_pmix_mdx_caddy_t *cd2;
     int32_t cnt;
     pmix_status_t rc = PMIX_SUCCESS;
-    bool assignedID = false;
+    bool assignedID = false, endptsgiven = false;
+    bool used = false;
     size_t cid;
     pmix_proc_t *members = NULL, *finmembers = NULL;
     size_t num_members, nfinmembers;
     pmix_data_array_t darray;
     pmix_info_t info;
     pmix_data_buffer_t dbuf;
-    pmix_byte_object_t bo;
+    pmix_byte_object_t bo, endpts = PMIX_BYTE_OBJECT_STATIC_INIT;
+    pmix_data_array_t *grpinfo = NULL;
     int32_t byused;
     pmix_server_pset_t *pset;
     void *ilist;
@@ -111,7 +126,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         goto complete;
     }
 
-    /* check for any directives */
+    /* unpack the ctrls buf sent by the grpcomm allgather */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
     if (PMIX_SUCCESS != rc) {
@@ -142,6 +157,18 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             nfinmembers = info.value.data.darray->size;
             PMIX_PROC_CREATE(finmembers, nfinmembers);
             memcpy(finmembers, info.value.data.darray->array, nfinmembers * sizeof(pmix_proc_t));
+
+        } else if (PMIX_CHECK_KEY(&info, PMIX_GROUP_ENDPT_DATA)) {
+            endpts.bytes = info.value.data.bo.bytes;
+            endpts.size = info.value.data.bo.size;
+            // protect the data
+            info.value.data.bo.bytes = NULL;
+            info.value.data.bo.size = 0;
+
+        } else if (PMIX_CHECK_KEY(&info, PMIX_GROUP_INFO_ARRAY)) {
+            grpinfo = info.value.data.darray;
+            // protect the data
+            info.value.data.darray = NULL;
         }
         /* cleanup */
         PMIX_INFO_DESTRUCT(&info);
@@ -159,61 +186,181 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     }
     rc = PMIX_SUCCESS;
 
-    if (PMIX_GROUP_CONSTRUCT == cd->op) {
-       /* add it to our list of known groups */
-        pset = PMIX_NEW(pmix_server_pset_t);
-        pset->name = strdup(cd->grpid);
-        if (NULL != finmembers) {
-            pset->num_members = nfinmembers;
-            PMIX_PROC_CREATE(pset->members, pset->num_members);
-            memcpy(pset->members, finmembers, nfinmembers * sizeof(pmix_proc_t));
-        } else {
-            pset->num_members = cd->nprocs;
-            PMIX_PROC_CREATE(pset->members, pset->num_members);
-            memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
-        }
-        pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
-    }
-
-    /* if anything is left in the buffer, then it is
-     * modex data that needs to be stored */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    byused = buf->bytes_used - (buf->unpack_ptr - buf->base_ptr);
-    if (0 < byused) {
-        bo.bytes = buf->unpack_ptr;
-        bo.size = byused;
-    }
-
-    PMIX_INFO_LIST_START(ilist);
-
-    // pass back the final group membership
-    darray.type = PMIX_PROC;
+   /* add it to our list of known groups */
+    pset = PMIX_NEW(pmix_server_pset_t);
+    pset->name = strdup(cd->grpid);
     if (NULL != finmembers) {
-        darray.array = finmembers;
-        darray.size = nfinmembers;
+        pset->num_members = nfinmembers;
+        PMIX_PROC_CREATE(pset->members, pset->num_members);
+        memcpy(pset->members, finmembers, nfinmembers * sizeof(pmix_proc_t));
     } else {
-        darray.array = cd->procs;
-        darray.size = cd->nprocs;
+        pset->num_members = cd->nprocs;
+        PMIX_PROC_CREATE(pset->members, pset->num_members);
+        memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
     }
-    PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
-
-    if (assignedID) {
-        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
-    }
-
-    if (NULL != bo.bytes && 0 < bo.size) {
-        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ENDPT_DATA, &bo, PMIX_BYTE_OBJECT);
-    }
+    pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
 
     if (NULL != members) {
+        // still need to generate invite event for procs
+        // that might be on nodes that were not involved
+        // in the original collective
+
+        PMIX_INFO_LIST_START(ilist);
+
+        // provide the group ID since the invitee won't have it
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ID, cd->grpid, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        // set the range to be only procs that were added
+        darray.type = PMIX_PROC;
         darray.array = members;
         darray.size = num_members;
-        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
+        // load the array - note: this copies the array!
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_EVENT_CUSTOM_RANGE, &darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        // mark that this event stays local and does not go up to the host
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_EVENT_STAYS_LOCAL, NULL, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        // pass back the final group membership
+        darray.type = PMIX_PROC;
+        if (NULL != finmembers) {
+            darray.array = finmembers;
+            darray.size = nfinmembers;
+        } else {
+            darray.array = cd->procs;
+            darray.size = cd->nprocs;
+        }
+        // load the array - note: this copies the array!
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        if (assignedID) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        // add the job-level info
+        PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+        rc = PMIx_server_collect_job_info(finmembers, nfinmembers, &dbuf);
+        if (PMIX_SUCCESS == rc) {
+            PMIx_Data_buffer_unload(&dbuf, &bo.bytes, &bo.size);
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_JOB_INFO, &bo, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+
+        if (0 < endpts.size) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ENDPT_DATA, &endpts, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        if (NULL != grpinfo) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_INFO_ARRAY, grpinfo, PMIX_DATA_ARRAY);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        if (NULL != members) {
+            darray.type = PMIX_PROC;
+            darray.array = members;
+            darray.size = num_members;
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+        PMIX_INFO_LIST_CONVERT(rc, ilist, &darray);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        cd2 = PMIX_NEW(prte_pmix_mdx_caddy_t);
+        cd2->info = (pmix_info_t*)darray.array;
+        cd2->ninfo = darray.size;
+        PMIX_INFO_LIST_RELEASE(ilist);
+
+        // notify local procs
+        PMIx_Notify_event(PMIX_GROUP_INVITED, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          cd2->info, cd2->ninfo, opcbfunc, cd2);
     }
-    PMIX_INFO_LIST_CONVERT(rc, ilist, &darray);
-    cd->info = (pmix_info_t*)darray.array;
-    cd->ninfo = darray.size;
-    PMIX_INFO_LIST_RELEASE(ilist);
+
+    if (NULL != cd->infocbfunc) {
+        // service the procs that are part of the collective
+
+        PMIX_INFO_LIST_START(ilist);
+        // pass back the final group membership
+        darray.type = PMIX_PROC;
+        if (NULL != finmembers) {
+            darray.array = finmembers;
+            darray.size = nfinmembers;
+        } else {
+            darray.array = cd->procs;
+            darray.size = cd->nprocs;
+        }
+        // load the array - note: this copies the array!
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        if (assignedID) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        if (0 < endpts.size) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ENDPT_DATA, &endpts, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        if (NULL != grpinfo) {
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_INFO_ARRAY, grpinfo, PMIX_DATA_ARRAY);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
+        if (NULL != members) {
+            darray.type = PMIX_PROC;
+            darray.array = members;
+            darray.size = num_members;
+            PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+        PMIX_INFO_LIST_CONVERT(rc, ilist, &darray);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        cd->info = (pmix_info_t*)darray.array;
+        cd->ninfo = darray.size;
+        PMIX_INFO_LIST_RELEASE(ilist);
+
+        /* return to the local procs in the collective */
+        cd->infocbfunc(rc, cd->info, cd->ninfo, cd->cbdata, relcb, cd);
+    }
 
 complete:
     if (NULL != cd->procs) {
@@ -225,13 +372,13 @@ complete:
     if (NULL != members) {
         PMIX_PROC_FREE(members, num_members);
     }
-    /* return to the local procs in the collective */
-    if (NULL != cd->infocbfunc) {
-        cd->infocbfunc(rc, cd->info, cd->ninfo, cd->cbdata, relcb, cd);
-    } else {
-        if (NULL != cd->info) {
-            PMIX_INFO_FREE(cd->info, cd->ninfo);
-        }
+    if (0 < endpts.size) {
+        PMIX_BYTE_OBJECT_DESTRUCT(&endpts);
+    }
+    if (NULL != grpinfo) {
+        PMIx_Data_array_free(grpinfo);
+    }
+    if (NULL == cd->infocbfunc) {
         PMIX_RELEASE(cd);
     }
 }
@@ -242,22 +389,40 @@ static void local_complete(int sd, short args, void *cbdata)
     pmix_server_pset_t *pset;
     pmix_data_array_t *members;
     pmix_proc_t *p;
+    void *ilist;
+    pmix_info_t istat;
+    pmix_status_t rc;
+    size_t n;
+    pmix_data_array_t darray;
 
     if (PMIX_GROUP_CONSTRUCT == cd->op) {
+
+        PMIX_INFO_LIST_START(ilist);
 
         // construct the group membership
         members = PMIx_Data_array_create(cd->nprocs, PMIX_PROC);
         p = (pmix_proc_t*)members->array;
         memcpy(p, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
-        cd->ninfo = 2;
-        PMIX_INFO_CREATE(cd->info, cd->ninfo);
-        PMIX_LOAD_KEY(cd->info[0].key, PMIX_GROUP_MEMBERSHIP);
-        cd->info[0].value.type = PMIX_DATA_ARRAY;
-        cd->info[0].value.data.darray = members;
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_MEMBERSHIP, members, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
 
-        PMIX_LOAD_KEY(cd->info[1].key, PMIX_GROUP_ID);
-        cd->info[1].value.type = PMIX_STRING;
-        cd->info[1].value.data.string = strdup(cd->grpid);
+        PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_ID, cd->grpid, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+
+        // check if they gave us any grp info
+        for (n=0; n < cd->ninfo; n++) {
+            if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GROUP_INFO_ARRAY)) {
+                PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_INFO_ARRAY, cd->info[n].value.data.darray, PMIX_DATA_ARRAY);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                }
+                break;
+            }
+        }
 
         /* add it to our list of known groups */
         pset = PMIX_NEW(pmix_server_pset_t);
@@ -270,6 +435,13 @@ static void local_complete(int sd, short args, void *cbdata)
         // protect the procs array
         cd->procs = NULL;
         cd->nprocs = 0;
+
+        // convert the info list - this will replace the incoming info
+        // which belong to the PMIx server library
+        PMIX_INFO_LIST_CONVERT(rc, ilist, &darray);
+        cd->info = (pmix_info_t*)darray.array;
+        cd->ninfo = darray.size;
+        PMIX_INFO_LIST_RELEASE(ilist);
 
         // return this to them
         cd->infocbfunc(PMIX_SUCCESS, cd->info, cd->ninfo, cd->cbdata, relcb, cd);
@@ -312,7 +484,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     size_t nmembers;
     size_t bootstrap = 0;
     bool copied = false;
-    pmix_byte_object_t *bo = NULL;
     struct timeval tv = {0, 0};
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -332,9 +503,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
 
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
             fence = PMIX_INFO_TRUE(&directives[i]);
-
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
-            bo = (pmix_byte_object_t *) &directives[i].value.data.bo;
 
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
             tv.tv_sec = directives[i].value.data.uint32;
@@ -357,7 +525,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
                 members = (pmix_proc_t*)directives[i].value.data.darray->array;
                 num_members = directives[i].value.data.darray->size;
             } else {
-                copied = true;
                 // need to aggregate these
                 mbrs = (pmix_proc_t*)directives[i].value.data.darray->array;
                 nmembers = directives[i].value.data.darray->size;
@@ -366,11 +533,14 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
                 // xfer data across
                 memcpy(p, members, num_members * sizeof(pmix_proc_t));
                 memcpy(&p[num_members], mbrs, nmembers * sizeof(pmix_proc_t));
-                // release the old array
-                PMIX_PROC_FREE(members, num_members);
+                // release the old array - avoid releasing the one passed in to us
+                if (copied) {
+                    PMIX_PROC_FREE(members, num_members);
+                }
                 // complete the xfer
                 members = p;
                 num_members = num_members + nmembers;
+                copied = true;
             }
         }
     }
@@ -401,6 +571,8 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
         cd->grpid = strdup(grpid);
         cd->procs = (pmix_proc_t*)procs;
         cd->nprocs = nprocs;
+        cd->info = (pmix_info_t*)directives;
+        cd->ninfo = ndirs;
         cd->infocbfunc = cbfunc;
         cd->cbdata = cbdata;
         PRTE_PMIX_THREADSHIFT(cd, prte_event_base, local_complete);
@@ -417,7 +589,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     PMIX_PROC_CREATE(cd->procs, nprocs);
     memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
     cd->nprocs = nprocs;
-    cd->grpcbfunc = group_release;
+    cd->grpcbfunc = prte_pmix_group_release;
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
 
@@ -444,16 +616,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     if (PMIX_SUCCESS != rc) {
         PMIX_RELEASE(cd);
         return rc;
-    }
-    PMIX_DATA_BUFFER_CREATE(cd->buf);
-    /* if they provided us with a data blob, send it along */
-    if (NULL != bo) {
-        /* We don't own the byte_object and so we have to
-         * copy it here */
-        rc = PMIx_Data_embed(cd->buf, bo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
     }
 
     /* pass it to the global collective algorithm */
