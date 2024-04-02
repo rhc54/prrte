@@ -335,7 +335,9 @@ PRTE_EXPORT extern pmix_status_t prte_pmix_set_scheduler(void);
 
 PRTE_EXPORT extern pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req);
 
-PRTE_EXPORT extern void prte_pmix_group_release(int status, pmix_data_buffer_t *buf, void *cbdata);
+PRTE_EXPORT extern void pmix_server_group_release(int status, pmix_proc_t *sender,
+                                                  pmix_data_buffer_t *buffer,
+                                                  prte_rml_tag_t tag, void *cbdata);
 
 
 #define PRTE_PMIX_ALLOC_REQ      0

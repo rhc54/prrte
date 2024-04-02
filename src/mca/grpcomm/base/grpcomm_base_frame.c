@@ -56,7 +56,8 @@ prte_grpcomm_base_t prte_grpcomm_base = {
 
 prte_grpcomm_API_module_t prte_grpcomm = {
     .xcast = prte_grpcomm_API_xcast,
-    .allgather = prte_grpcomm_API_allgather
+    .allgather = prte_grpcomm_API_allgather,
+    .grp_construct = prte_grpcomm_API_grp_construct
 };
 
 static int base_register(pmix_mca_base_register_flag_t flags)
@@ -188,3 +189,63 @@ static void cdes(prte_grpcomm_coll_t *p)
 PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t,
                     pmix_list_item_t,
                     ccon, cdes);
+
+
+static void mdcon(prte_pmix_mdx_caddy_t *p)
+{
+    p->sig = NULL;
+    p->buf = NULL;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
+    p->procs = NULL;
+    p->nprocs = 0;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->grpcbfunc = NULL;
+    p->mdxcbfunc = NULL;
+    p->opcbfunc = NULL;
+    p->cbdata = NULL;
+    p->relcbdata = NULL;
+}
+static void mddes(prte_pmix_mdx_caddy_t *p)
+{
+    if (NULL != p->sig) {
+        PMIX_RELEASE(p->sig);
+    }
+    if (NULL != p->buf) {
+        PMIX_DATA_BUFFER_RELEASE(p->buf);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->ctrls);
+}
+PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t,
+                    pmix_object_t,
+                    mdcon, mddes);
+
+
+static void grpcon(prte_pmix_grp_caddy_t *p)
+{
+    p->op = PMIX_GROUP_NONE;
+    p->grpid = NULL;
+    p->buf = NULL;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
+    p->procs = NULL;
+    p->nprocs = 0;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->infocbfunc = NULL;
+    p->cbdata = NULL;
+    p->relcbdata = NULL;
+}
+static void grpdes(prte_pmix_grp_caddy_t *p)
+{
+    if (NULL != p->grpid) {
+        free(p->grpid);
+    }
+    if (NULL != p->buf) {
+        PMIX_DATA_BUFFER_RELEASE(p->buf);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->ctrls);
+}
+PMIX_CLASS_INSTANCE(prte_pmix_grp_caddy_t,
+                    pmix_object_t,
+                    grpcon, grpdes);
+

@@ -113,8 +113,6 @@ typedef struct {
     pmix_object_t super;
     prte_event_t ev;
     prte_grpcomm_signature_t *sig;
-    pmix_group_operation_t op;
-    char *grpid;
     pmix_data_buffer_t *buf;
     pmix_byte_object_t ctrls;
     pmix_proc_t *procs;
@@ -123,12 +121,28 @@ typedef struct {
     size_t ninfo;
     prte_grpcomm_cbfunc_t grpcbfunc;
     pmix_modex_cbfunc_t mdxcbfunc;
-    pmix_info_cbfunc_t infocbfunc;
     pmix_op_cbfunc_t opcbfunc;
     void *cbdata;
     void *relcbdata;
 } prte_pmix_mdx_caddy_t;
 PMIX_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
+
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    pmix_group_operation_t op;
+    char *grpid;
+    pmix_data_buffer_t *buf;
+    pmix_byte_object_t ctrls;
+    pmix_proc_t *procs;
+    size_t nprocs;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_info_cbfunc_t grpcbfunc;
+    void *cbdata;
+    void *relcbdata;
+} prte_pmix_grp_caddy_t;
+PMIX_CLASS_DECLARATION(prte_pmix_grp_caddy_t);
 
 /*
  * Component functions - all MUST be provided!
@@ -157,27 +171,22 @@ typedef int (*prte_grpcomm_base_module_xcast_fn_t)(pmix_rank_t *vpids, size_t np
 typedef int (*prte_grpcomm_base_module_allgather_fn_t)(prte_grpcomm_coll_t *coll,
                                                        prte_pmix_mdx_caddy_t *cd);
 
-/* Reliable broadcast a message thru BMG.
- * only need to provide a message buffer, dont need create dmns
- */
-typedef int (*prte_grpcomm_base_module_rbcast_fn_t)(pmix_data_buffer_t *msg);
 
-typedef int (*prte_grpcomm_base_module_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
-
-typedef int (*prte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
-
+/* support group construct operation - this is basically an allgather
+ * operation, but there are enough differences to warrant keeping it
+ * separate to avoid over-complicating the allgather code */
+typedef int (*prte_grpcomm_base_module_grp_construct_fn_t)(prte_grpcomm_coll_t *coll,
+                                                           prte_pmix_grp_caddy_t *cd);
 /*
  * Ver 3.0 - internal modules
  */
 typedef struct {
-    prte_grpcomm_base_module_init_fn_t init;
-    prte_grpcomm_base_module_finalize_fn_t finalize;
+    prte_grpcomm_base_module_init_fn_t          init;
+    prte_grpcomm_base_module_finalize_fn_t      finalize;
     /* collective operations */
-    prte_grpcomm_base_module_xcast_fn_t xcast;
-    prte_grpcomm_base_module_allgather_fn_t allgather;
-    prte_grpcomm_base_module_rbcast_fn_t rbcast;
-    prte_grpcomm_base_module_rbcast_register_cb_fn_t register_cb;
-    prte_grpcomm_base_module_rbcast_unregister_cb_fn_t unregister_cb;
+    prte_grpcomm_base_module_xcast_fn_t         xcast;
+    prte_grpcomm_base_module_allgather_fn_t     allgather;
+    prte_grpcomm_base_module_grp_construct_fn_t grp_construct;
 } prte_grpcomm_base_module_t;
 
 /* the Public APIs */
@@ -202,24 +211,13 @@ typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig, p
  * will be invoked upon completion. */
 typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_pmix_mdx_caddy_t *cd);
 
-/* Reliable broadcast a message. Caller will provide an array
- * of daemon. A NULL pointer indicates that all known daemons are in the BMG.
- * A pointer to a name that includes ORTE_VPID_WILDCARD
- * all daemons in the specified jobid.*/
-typedef int (*prte_grpcomm_base_API_rbcast_fn_t)(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
-                                                 pmix_data_buffer_t *msg);
-
-typedef int (*prte_grpcomm_base_API_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
-
-typedef int (*prte_grpcomm_base_API_rbcast_unregister_cb_fn_t)(int type);
+typedef int (*prte_grpcomm_base_API_grp_construct_fn_t)(prte_pmix_grp_caddy_t *cd);
 
 typedef struct {
     /* collective operations */
-    prte_grpcomm_base_API_xcast_fn_t xcast;
-    prte_grpcomm_base_API_allgather_fn_t allgather;
-    prte_grpcomm_base_API_rbcast_fn_t rbcast;
-    prte_grpcomm_base_API_rbcast_register_cb_fn_t register_cb;
-    prte_grpcomm_base_API_rbcast_unregister_cb_fn_t unregister_cb;
+    prte_grpcomm_base_API_xcast_fn_t            xcast;
+    prte_grpcomm_base_API_allgather_fn_t        allgather;
+    prte_grpcomm_base_API_grp_construct_fn_t    grp_construct;
 } prte_grpcomm_API_module_t;
 
 /*

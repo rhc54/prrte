@@ -15,7 +15,7 @@
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,6 +83,8 @@ PRTE_EXPORT int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_t
                                        pmix_data_buffer_t *buf);
 
 PRTE_EXPORT int prte_grpcomm_API_allgather(prte_pmix_mdx_caddy_t *cd);
+
+PRTE_EXPORT int prte_grpcomm_API_grp_construct(prte_pmix_grp_caddy_t *cd);
 
 PRTE_EXPORT prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig,
                                                                bool create);

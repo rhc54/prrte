@@ -79,7 +79,9 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     PMIX_RELEASE(cd);
 }
 
-void prte_pmix_group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
+void pmix_server_group_release(int status, pmix_proc_t *sender,
+                               pmix_data_buffer_t *buffer,
+                               prte_rml_tag_t tag, void *cbdata)
 {
     prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
     prte_pmix_mdx_caddy_t *cd2;
@@ -585,10 +587,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
     cd->op = op;
     cd->grpid = strdup(grpid);
-    /* have to copy the procs in case we add members */
-    PMIX_PROC_CREATE(cd->procs, nprocs);
-    memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
-    cd->nprocs = nprocs;
     cd->grpcbfunc = prte_pmix_group_release;
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;

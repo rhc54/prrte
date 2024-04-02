@@ -121,13 +121,8 @@ static void allgather_stub(int fd, short args, void *cbdata)
     /* retrieve an existing tracker, create it if not
      * already found. The allgather module is responsible
      * for releasing it upon completion of the collective */
-    if (NULL != cd->sig->groupID) {
-        ret = pmix_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->groupID,
-                                            strlen(cd->sig->groupID), (void **) &seq_number);
-    } else {
-        ret = pmix_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
-                                            cd->sig->sz * sizeof(pmix_proc_t), (void **) &seq_number);
-    }
+    ret = pmix_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
+                                        cd->sig->sz * sizeof(pmix_proc_t), (void **) &seq_number);
     if (PMIX_ERR_NOT_FOUND == ret) {
         seq_number = (uint32_t *) malloc(sizeof(uint32_t));
         *seq_number = 0;
@@ -141,13 +136,8 @@ static void allgather_stub(int fd, short args, void *cbdata)
         PMIX_RELEASE(cd);
         return;
     }
-    if (NULL != cd->sig->groupID) {
-        ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->groupID,
-                                            strlen(cd->sig->groupID), (void *) seq_number);
-    } else {
-        ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
-                                            cd->sig->sz * sizeof(pmix_proc_t), (void *) seq_number);
-    }
+    ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
+                                        cd->sig->sz * sizeof(pmix_proc_t), (void *) seq_number);
     if (PMIX_SUCCESS != ret) {
         PMIX_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot add new signature to hash table",
@@ -191,6 +181,85 @@ int prte_grpcomm_API_allgather(prte_pmix_mdx_caddy_t *cd)
     return PRTE_SUCCESS;
 }
 
+static void grp_construct_stub(int fd, short args, void *cbdata)
+{
+    prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t *) cbdata;
+    int ret = PRTE_SUCCESS;
+    prte_grpcomm_base_active_t *active;
+    prte_grpcomm_coll_t *coll;
+    uint32_t *seq_number;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:base:grp_construct stub",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+
+    /* retrieve an existing tracker, create it if not
+     * already found. The grp_construct module is responsible
+     * for releasing it upon completion of the collective */
+    ret = pmix_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->groupID,
+                                        strlen(cd->sig->groupID), (void **) &seq_number);
+    if (PMIX_ERR_NOT_FOUND == ret) {
+        seq_number = (uint32_t *) malloc(sizeof(uint32_t));
+        *seq_number = 0;
+    } else if (PMIX_SUCCESS == ret) {
+        *seq_number = *seq_number + 1;
+    } else {
+        PMIX_OUTPUT((prte_grpcomm_base_framework.framework_output,
+                     "%s rpcomm:base:grp_construct cannot get signature from hash table",
+                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PMIX_ERROR_LOG(ret);
+        PMIX_RELEASE(cd);
+        return;
+    }
+    ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->groupID,
+                                        strlen(cd->sig->groupID), (void *) seq_number);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_OUTPUT((prte_grpcomm_base_framework.framework_output,
+                     "%s rpcomm:base:grp_construct cannot add new signature to hash table",
+                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PMIX_ERROR_LOG(ret);
+        PMIX_RELEASE(cd);
+        return;
+    }
+    coll = prte_grpcomm_base_get_tracker(cd->sig, true);
+    if (NULL == coll) {
+        PMIX_RELEASE(cd->sig);
+        PMIX_RELEASE(cd);
+        return;
+    }
+    PMIX_RELEASE(cd->sig);
+    cd->sig = NULL;
+    coll->cbfunc = cd->grpcbfunc;
+    coll->cbdata = cd;
+
+    /* cycle thru the actives and see who can process it */
+    PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
+    {
+        if (NULL != active->module->grp_construct) {
+            if (PRTE_SUCCESS == active->module->grp_construct(coll, cd)) {
+                break;
+            }
+        }
+    }
+}
+
+int prte_grpcomm_API_grp_construct(prte_pmix_grp_caddy_t *cd)
+{
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:base:grp_construct",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+
+    /* must push this into the event library to ensure we can
+     * access framework-global data safely */
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, grp_construct_stub, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
+    return PRTE_SUCCESS;
+}
+
 prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig, bool create)
 {
     prte_grpcomm_coll_t *coll;
@@ -223,21 +292,44 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
                 // if this is a bootstrap, adjust the membership
                 if (0 < sig->bootstrap) {
                     PMIX_CONSTRUCT(&plist, pmix_list_t);
-                    for (n=0; n < sig->sz; n++) {
-                        // see if we already have this proc
-                        found = false;
-                        for (nmb=0; nmb < coll->sig->sz; nmb++) {
-                            if (PMIX_CHECK_PROCID(&sig->signature[n], &coll->sig->signature[nmb])) {
-                                // yes, we do
-                                found = true;
-                                break;
+                    // check to see if they specified any participants
+                    if (NULL != sig->signature) {
+                        for (n=0; n < sig->sz; n++) {
+                            // see if we already have this proc
+                            found = false;
+                            for (nmb=0; nmb < coll->sig->sz; nmb++) {
+                                if (PMIX_CHECK_PROCID(&sig->signature[n], &coll->sig->signature[nmb])) {
+                                    // yes, we do
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                // cache the proc
+                                nm = PMIX_NEW(prte_namelist_t);
+                                memcpy(&nm->name, &sig->signature[n], sizeof(pmix_proc_t));
+                                pmix_list_append(&plist, &nm->super);
                             }
                         }
-                        if (!found) {
-                            // cache the proc
-                            nm = PMIX_NEW(prte_namelist_t);
-                            memcpy(&nm->name, &sig->signature[n], sizeof(pmix_proc_t));
-                            pmix_list_append(&plist, &nm->super);
+                    }
+                    // now check for add-members
+                    if (NULL != sig->addmembers) {
+                        for (n=0; n < sig->nmembers; n++) {
+                            // see if we already have this proc
+                            found = false;
+                            for (nmb=0; nmb < coll->sig->sz; nmb++) {
+                                if (PMIX_CHECK_PROCID(&sig->addmembers[n], &coll->sig->signature[nmb])) {
+                                    // yes, we do
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                // cache the proc
+                                nm = PMIX_NEW(prte_namelist_t);
+                                memcpy(&nm->name, &sig->addmembers[n], sizeof(pmix_proc_t));
+                                pmix_list_append(&plist, &nm->super);
+                            }
                         }
                     }
                     // add any missing procs to the signature
@@ -256,7 +348,7 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
                         coll->sig->sz = n;
                     }
                 }
-                goto checkmembers;
+                return coll;
             }
         } else if (sig->sz == coll->sig->sz) {
             // must match proc signature
@@ -282,16 +374,22 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     if (NULL != sig->groupID) {
         coll->sig->groupID = strdup(sig->groupID);
     }
-    // we have to know the participating procs
-    coll->sig->sz = sig->sz;
-    coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
-    memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
-    // need to know the bootstrap in case one is ongoing
-    coll->sig->bootstrap = sig->bootstrap;
+    if (NULL != sig->signature) {
+        // we have to know the participating procs
+        coll->sig->sz = sig->sz;
+        coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
+        memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
+    }
+    if (0 < sig->bootstrap || NULL == sig->signature) {
+        // need to know the bootstrap in case one is ongoing
+        coll->sig->bootstrap = true;
+
+    }
     pmix_list_append(&prte_grpcomm_base.ongoing, &coll->super);
 
     /* if this is a bootstrap operation, then there is no "rollup"
-     * collective - each daemon reports directly to the DVM controller */
+     * collective - each daemon reports each participating proc
+     * directly to the DVM controller */
     if (0 < coll->sig->bootstrap) {
         coll->nexpected = coll->sig->bootstrap;
         goto checkmembers;

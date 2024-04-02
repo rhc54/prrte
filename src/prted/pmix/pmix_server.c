@@ -933,6 +933,10 @@ void pmix_server_start(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP,
                   PRTE_RML_PERSISTENT, pmix_server_alloc_request_resp, NULL);
 
+    /* setup recv for group construct response */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GRP_CONSTRUCT,
+                  PRTE_RML_PERSISTENT, pmix_server_group_release, NULL);
+
     if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
@@ -960,6 +964,7 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GRP_CONSTRUCT);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
@@ -2052,39 +2057,6 @@ static void rqdes(pmix_server_req_t *p)
 PMIX_CLASS_INSTANCE(pmix_server_req_t,
                     pmix_object_t,
                     rqcon, rqdes);
-
-static void mdcon(prte_pmix_mdx_caddy_t *p)
-{
-    p->sig = NULL;
-    p->grpid = NULL;
-    p->buf = NULL;
-    PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
-    p->procs = NULL;
-    p->nprocs = 0;
-    p->info = NULL;
-    p->ninfo = 0;
-    p->cbdata = NULL;
-    p->grpcbfunc = NULL;
-    p->mdxcbfunc = NULL;
-    p->infocbfunc = NULL;
-    p->opcbfunc = NULL;
-}
-static void mddes(prte_pmix_mdx_caddy_t *p)
-{
-    if (NULL != p->sig) {
-        PMIX_RELEASE(p->sig);
-    }
-    if (NULL != p->grpid) {
-        free(p->grpid);
-    }
-    if (NULL != p->buf) {
-        PMIX_DATA_BUFFER_RELEASE(p->buf);
-    }
-    PMIX_BYTE_OBJECT_DESTRUCT(&p->ctrls);
-}
-PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t,
-                    pmix_object_t,
-                    mdcon, mddes);
 
 static void pscon(pmix_server_pset_t *p)
 {
