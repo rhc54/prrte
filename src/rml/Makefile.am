@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,12 +23,17 @@
 headers += \
     rml/rml.h \
     rml/rml_types.h \
-    rml/rml_contact.h
+    rml/rml_contact.h \
+    rml/rml_base_common.h \
+    rml/rml_hdr.h
 
 libprrte_la_SOURCES += \
     rml/rml.c \
     rml/rml_send.c \
     rml/rml_recv.c \
+    rml/rml_base_common.c \
+    rml/rml_base_connection.c \
     rml/rml_base_contact.c \
+    rml/rml_base_listener.c \
     rml/rml_base_msg_handlers.c \
     rml/routed_radix.c

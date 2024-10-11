@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,10 +59,9 @@ BEGIN_C_DECLS
  * Convenience Typedef
  */
 typedef struct {
+    int output;
     char *include;
     char *exclude;
-    pmix_list_t components;
-    pmix_list_t actives;
     int max_uri_length;
     pmix_list_t peers;
 } prte_oob_base_t;
@@ -76,18 +75,11 @@ typedef struct {
 } prte_oob_base_peer_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_base_peer_t);
 
-/* MCA framework */
-PRTE_EXPORT extern pmix_mca_base_framework_t prte_oob_base_framework;
-PRTE_EXPORT int prte_oob_base_select(void);
-
 /* Access the OOB internal functions via set of event-based macros
  * for inserting messages and other commands into the
  * OOB event base. This ensures that all OOB operations occur
  * asynchronously in a thread-safe environment.
- * Note that this doesn't mean that messages will be *sent*
- * in order as that depends on the specific transport being
- * used, when that module's event base indicates the transport
- * is available, etc.
+ * Note that this means that messages _are_ sent in order.
  */
 typedef struct {
     pmix_object_t super;
@@ -108,11 +100,11 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_send_t);
  */
 typedef void (*mca_oob_send_callback_fn_t)(int status, struct iovec *iov, int count, void *cbdata);
 
-PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
+PRTE_EXPORT void prte_oob_send_nb(int fd, short args, void *cbdata);
 #define PRTE_OOB_SEND(m)                                                                          \
     do {                                                                                          \
         prte_oob_send_t *prte_oob_send_cd;                                                        \
-        pmix_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
+        pmix_output_verbose(1, prte_oob_base.output, "%s OOB_SEND: %s:%d",    \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
         prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \

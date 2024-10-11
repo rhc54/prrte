@@ -255,6 +255,7 @@ PMIX_CLASS_DECLARATION(prte_rml_recv_cb_t);
 /* structure to send RML messages - used internally */
 typedef struct {
     pmix_list_item_t super;
+    prte_event_t ev;
     pmix_proc_t dst; // targeted recipient
     pmix_proc_t origin;
     int status;         // returned status on send
@@ -318,6 +319,57 @@ typedef struct {
     pmix_bitmap_t relatives;
 } prte_routed_tree_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_routed_tree_t);
+
+
+// connection-related
+/**
+ * the state of the connection
+ */
+typedef enum {
+    RML_UNCONNECTED,
+    RML_CONNECTION_CLOSED,
+    RML_RESOLVE,
+    RML_CONNECTING,
+    RML_CONNECT_ACK,
+    RML_CONNECTED,
+    RML_CONNECTION_FAILED,
+    RML_ACCEPTING
+} prte_rml_state_t;
+
+typedef struct {
+    pmix_list_item_t super;
+    struct sockaddr_storage addr; // an address where a peer can be found
+    int retries;                  // number of times we have tried to connect to this address
+    prte_rml_state_t state;       // state of this address
+    int if_mask;                  // if mask of this address
+} prte_rml_addr_t;
+PMIX_CLASS_DECLARATION(prte_rml_addr_t);
+
+/* object for tracking peers in the module */
+typedef struct {
+    pmix_list_item_t super;
+    /* although not required, there is enough debug
+     * value that retaining the name makes sense
+     */
+    pmix_proc_t name;
+    char *auth_method; // method they used to authenticate
+    int sd;
+    pmix_list_t addrs;
+    prte_rml_addr_t *active_addr;
+    prte_rml_state_t state;
+    int num_retries;
+    prte_event_t send_event; /**< registration with event thread for send events */
+    bool send_ev_active;
+    prte_event_t recv_event; /**< registration with event thread for recv events */
+    bool recv_ev_active;
+    prte_event_t timer_event; /**< timer for retrying connection failures */
+    bool timer_ev_active;
+    pmix_list_t send_queue;        /**< list of messages to send */
+    prte_rml_send_t *send_msg; /**< current send in progress */
+    prte_rml_recv_t *recv_msg; /**< current recv in progress */
+} prte_rml_peer_t;
+PMIX_CLASS_DECLARATION(prte_rml_peer_t);
+
 
 END_C_DECLS
 

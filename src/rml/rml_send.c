@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,11 +31,12 @@
 #include "src/util/pmix_name_fns.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/oob/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 
 #include "src/rml/rml.h"
+
+static void send_nb(int fd, short args, void *cbdata);
 
 int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             pmix_data_buffer_t *buffer,
@@ -85,8 +86,37 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
     snd->tag = tag;
     snd->dbuf = buffer;
 
-    /* activate the OOB send state */
-    PRTE_OOB_SEND(snd);
+    /* activate the OOB send state - need to threadshift
+     * into an event so we can access global data structures
+     */
+    pmix_output_verbose(1, prte_rml_base.rml_output, "%s OOB_SEND: %s:%d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);
+    PRTE_PMIX_THREADSHIFT(snd, prte_event_base, send_nb);
+
 
     return PRTE_SUCCESS;
+}
+
+static void send_nb(int fd, short args, void *cbdata)
+{
+    prte_rml_send_t *msg = (prte_rml_send_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(msg);
+
+    pmix_output_verbose(5, prte_rml_base.rml_output,
+                        "%s rml:send to target %s - attempt %u",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst),
+                        msg->retries);
+
+    /* don't try forever - if we have exceeded the number of retries,
+     * then report this message as undeliverable even if someone continues
+     * to think they could reach it */
+    if (prte_rml_base.max_retries <= msg->retries) {
+        msg->status = PRTE_ERR_NO_PATH_TO_TARGET;
+        PRTE_RML_SEND_COMPLETE(msg);
+        return;
+    }
+
+
 }

@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,6 +47,8 @@
 
 #include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/include/prte_stdatomic.h"
+#include "src/mca/ptl/ptl_types.h"
 
 BEGIN_C_DECLS
 /**
@@ -152,13 +154,49 @@ typedef struct {
     pmix_list_t children;
     int radix;
     bool static_ports;
+
+    /* Port specifications */
+    int tcp_sndbuf;   /**< socket send buffer size */
+    int tcp_rcvbuf;   /**< socket recv buffer size */
+
+    /* IPv4 support */
+    bool disable_ipv4_family; /**< disable this AF */
+    char **tcp_static_ports;  /**< Static ports - IPV4 */
+    char **tcp_dyn_ports;     /**< Dynamic ports - IPV4 */
+    char **ipv4conns;
+    char **ipv4ports;
+
+    /* IPv6 support */
+    bool disable_ipv6_family; /**< disable this AF */
+    char **tcp6_static_ports; /**< Static ports - IPV6 */
+    char **tcp6_dyn_ports;    /**< Dynamic ports - IPV6 */
+    char **ipv6conns;
+    char **ipv6ports;
+
+    /* connection support */
+    pmix_list_t peers;  /** lists of peers to which we are connected */
+    int peer_limit;                  /**< max size of tcp peer cache */
+    pmix_list_t local_ifs; /**< prte list of local pmix_pif_t interfaces */
+    char **if_masks;
+    pmix_list_t listeners;       /**< List of sockets being monitored by event or thread */
+    pmix_thread_t listen_thread; /**< handle to the listening thread */
+    prte_atomic_bool_t listen_thread_active;
+    struct timeval listen_thread_tv; /**< Timeout when using listen thread */
+    int stop_thread[2];              /**< pipe used to exit the listen thread */
+    int keepalive_probes;   /**< number of keepalives that can be missed before declaring error */
+    int keepalive_time;     /**< idle time in seconds before starting to send keepalives */
+    int keepalive_intvl;    /**< time between keepalives, in seconds */
+    int retry_delay;        /**< time to wait before retrying connection */
+    int max_recon_attempts; /**< maximum number of times to attempt connect before giving up (-1 for
+                               never) */
+
 } prte_rml_base_t;
 
 PRTE_EXPORT extern prte_rml_base_t prte_rml_base;
 
 PRTE_EXPORT void prte_rml_register(void);
 PRTE_EXPORT void prte_rml_close(void);
-PRTE_EXPORT void prte_rml_open(void);
+PRTE_EXPORT int prte_rml_open(void);
 /* common implementations */
 PRTE_EXPORT void prte_rml_base_post_recv(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_rml_base_process_msg(int fd, short flags, void *cbdata);
@@ -215,6 +253,29 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
         PMIX_RELEASE(m);                                                                      \
     } while (0);
 
+
+/*
+ * Data structure for accepting connections.
+ */
+typedef struct {
+    pmix_list_item_t item;
+    bool ev_active;
+    prte_event_t event;
+    bool tcp6;
+    int sd;
+    uint16_t port;
+} prte_rml_listener_t;
+PMIX_CLASS_DECLARATION(prte_rml_listener_t);
+
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    int fd;
+    struct sockaddr_storage addr;
+} prte_rml_pending_connection_t;
+PMIX_CLASS_DECLARATION(prte_rml_pending_connection_t);
+
+PRTE_EXPORT int prte_rml_start_listening(void);
 
 END_C_DECLS
 

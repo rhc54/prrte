@@ -65,6 +65,7 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .pid = 0,
     .proc_type = PRTE_PROC_TYPE_NONE,
     .my_port = 0,
+    .my_uri = NULL,
     .tmpdir_base = NULL,
     .top_session_dir = NULL,
     .cpuset = NULL,
@@ -240,6 +241,11 @@ int prte_proc_info_finalize(void)
     if (NULL != prte_process_info.nodename) {
         free(prte_process_info.nodename);
         prte_process_info.nodename = NULL;
+    }
+
+    if (NULL != prte_process_info.my_uri) {
+        free(prte_process_info.my_uri);
+        prte_process_info.my_uri = NULL;
     }
 
     if (NULL != prte_process_info.cpuset) {

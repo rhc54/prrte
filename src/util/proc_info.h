@@ -76,6 +76,7 @@ typedef struct prte_process_info_t {
     pid_t pid;                  /**< Local process ID for this process */
     prte_proc_type_t proc_type; /**< Type of process */
     uint16_t my_port;           /**< TCP port for out-of-band comm */
+    char *my_uri;               /**< my URI for OOB messaging */
     /* The session directory has the form
      * <prefix>/<openmpi-sessions-user>/<jobid>/<procid>, where the prefix
      * can either be provided by the user via the
