@@ -324,7 +324,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
            happened
         */
         if (PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
-            if (PRTE_SUCCESS != (i = prte_iof_base_setup_child(&cd->opts, &cd->env))) {
+            if (PRTE_SUCCESS != (i = prte_iof_base_setup_child(&cd->opts, cd->jdata))) {
                 PRTE_ERROR_LOG(i);
                 send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
                                      prte_process_info.nodename, cd->app->app);
@@ -350,6 +350,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* close all open file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
        the parent. */
+pmix_output(0, "%s:%d", __func__, __LINE__);
     pmix_close_open_file_descriptors(write_fd);
 
     if (cd->argv == NULL) {
@@ -427,11 +428,6 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     prte_odls_pipe_err_msg_t msg;
     char file[PRTE_ODLS_MAX_FILE_LEN + 1], topic[PRTE_ODLS_MAX_TOPIC_LEN + 1], *str = NULL;
 
-    if (cd->opts.connect_stdin) {
-        close(cd->opts.p_stdin[0]);
-    }
-    close(cd->opts.p_stdout[1]);
-    close(cd->opts.p_stderr[1]);
 
 #if PRTE_HAVE_STOP_ON_EXEC
     if (NULL != cd->child) {

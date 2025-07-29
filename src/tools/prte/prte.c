@@ -134,6 +134,7 @@ static void epipe_signal_callback(int fd, short args, void *cbdata);
 static int prep_singleton(const char *name);
 static bool keepalive = false;
 
+#if 0
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
@@ -142,6 +143,7 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
+#endif
 
 static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
@@ -262,7 +264,7 @@ int main(int argc, char *argv[])
     prte_pmix_lock_t lock;
     pmix_list_t apps, jobdata;
     prte_pmix_app_t *app;
-    pmix_info_t *iptr, *iptr2, info;
+    pmix_info_t *iptr, info;
     pmix_status_t ret;
     size_t n, ninfo, param_len;
     pmix_app_t *papps;
@@ -1201,6 +1203,7 @@ int main(int argc, char *argv[])
         ++n;
     }
 
+pmix_close_open_file_descriptors(-1);
     if (verbose) {
         pmix_output(0, "Spawning job");
     }
@@ -1231,6 +1234,7 @@ int main(int argc, char *argv[])
         pmix_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
 
+#if 0
     /* check what user wants us to do with stdin */
     PMIX_LOAD_NSPACE(pname.nspace, spawnednspace);
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_STDIN);
@@ -1258,6 +1262,7 @@ int main(int argc, char *argv[])
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
         PMIX_INFO_FREE(iptr2, 1);
     }
+#endif
 
 proceed:
     /* loop the event lib until an exit event is detected */
@@ -1267,6 +1272,7 @@ proceed:
 
     PMIX_ACQUIRE_OBJECT(prte_event_base_active);
 
+#if 0
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -1278,6 +1284,7 @@ proceed:
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
+#endif
 
 DONE:
     /* cleanup and leave */

@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -240,10 +240,12 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t *proct;
 
+pmix_output(0, "CLOSING IO CHANNEL");
     PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
+                pmix_output(0, "CLOSING STDIN");
                 if (NULL != proct->stdinev) {
                     PMIX_RELEASE(proct->stdinev);
                 }

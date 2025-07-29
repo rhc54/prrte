@@ -548,14 +548,15 @@ int prun_common(pmix_cli_result_t *results,
 #ifdef PMIX_SPAWN_PTY
     // see if they want to use a pty
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_PTY)) {
+        pmix_output(0, "CLI PTY");
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_PTY, NULL, PMIX_BOOL);
 #ifdef PMIX_PTY_TERMIO
         {
             // pass our termio settings
             struct termios terms;
             pmix_byte_object_t tbo;
-            tbo.bytes = malloc(2 * sizeof(struct termios));
-            tbo.size = 2 * sizeof(struct termios);
+            tbo.bytes = (char*)&terms;
+            tbo.size = sizeof(struct termios);
             ret = pmix_gettermios(STDIN_FILENO, &terms);
             if (PMIX_SUCCESS != ret) {
                 free(tbo.bytes);
@@ -563,18 +564,7 @@ int prun_common(pmix_cli_result_t *results,
                 PRTE_UPDATE_EXIT_STATUS(ret);
                 goto DONE;
             }
-            memcpy(tbo.bytes, &terms, sizeof(struct termios));
-            memset(&terms, 0, sizeof(struct termios));
-            ret = pmix_gettermios(STDOUT_FILENO, &terms);
-            if (PMIX_SUCCESS != ret) {
-                free(tbo.bytes);
-                PMIX_INFO_LIST_RELEASE(jinfo);
-                PRTE_UPDATE_EXIT_STATUS(ret);
-                goto DONE;
-            }
-            memcpy(tbo.bytes+sizeof(struct termios), &terms, sizeof(struct termios));
             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PTY_TERMIO, &tbo, PMIX_BYTE_OBJECT);
-            PMIX_BYTE_OBJECT_DESTRUCT(&tbo);
         }
 #endif
 #ifdef PMIX_PTY_WSIZE
@@ -582,8 +572,8 @@ int prun_common(pmix_cli_result_t *results,
             // pass our window size
             struct winsize ws;
             pmix_byte_object_t tbo;
-            tbo.bytes = malloc(2 * sizeof(struct winsize));
-            tbo.size = 2 * sizeof(struct winsize);
+            tbo.bytes = (char*)&ws;
+            tbo.size = sizeof(struct winsize);
             ret = pmix_getwinsz(STDIN_FILENO, &ws);
             if (PMIX_SUCCESS != ret) {
                 free(tbo.bytes);
@@ -591,18 +581,7 @@ int prun_common(pmix_cli_result_t *results,
                 PRTE_UPDATE_EXIT_STATUS(ret);
                 goto DONE;
             }
-            memcpy(tbo.bytes, &ws, sizeof(struct winsize));
-            memset(&ws, 0, sizeof(struct winsize));
-            ret = pmix_getwinsz(STDOUT_FILENO, &ws);
-            if (PMIX_SUCCESS != ret) {
-                free(tbo.bytes);
-                PMIX_INFO_LIST_RELEASE(jinfo);
-                PRTE_UPDATE_EXIT_STATUS(ret);
-                goto DONE;
-            }
-            memcpy(tbo.bytes+sizeof(struct winsize), &ws, sizeof(struct winsize));
             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PTY_WSIZE, &tbo, PMIX_BYTE_OBJECT);
-            PMIX_BYTE_OBJECT_DESTRUCT(&tbo);
         }
 #endif
     }
@@ -720,6 +699,7 @@ int prun_common(pmix_cli_result_t *results,
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 2);
 
+#if 0
     /* check what user wants us to do with stdin */
     PMIX_LOAD_NSPACE(pname.nspace, spawnednspace);
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_STDIN);
@@ -747,6 +727,7 @@ int prun_common(pmix_cli_result_t *results,
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
         PMIX_INFO_FREE(iptr, 1);
     }
+#endif
 
     /* register to be notified when
      * our job completes */
@@ -791,6 +772,7 @@ int prun_common(pmix_cli_result_t *results,
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&rellock);
 
+#if 0
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -802,6 +784,7 @@ int prun_common(pmix_cli_result_t *results,
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
+#endif
 
 DONE:
     PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)

@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -91,7 +91,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
                          (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
                          : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
-                         PRTE_NAME_PRINT(&proct->name)));
+                         (NULL == proct) ? "NULL" : PRTE_NAME_PRINT(&proct->name)));
 
     if (NULL == proct) {
         /* this is an error - nothing we can do */
