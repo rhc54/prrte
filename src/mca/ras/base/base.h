@@ -52,13 +52,23 @@ PRTE_EXPORT int prte_ras_base_select(void);
  * globals that might be needed
  */
 typedef struct prte_ras_base_t {
+    /* list of selected modules */
+    pmix_list_t selected_modules;
     bool allocation_read;
-    prte_ras_base_module_t *active_module;
     int total_slots_alloc;
     int multiplier;
     bool launch_orted_on_hn;
     bool simulated;
 } prte_ras_base_t;
+
+typedef struct {
+    pmix_list_item_t super;
+    int pri;
+    prte_ras_base_module_t *module;
+    pmix_mca_base_component_t *component;
+} prte_ras_base_selected_module_t;
+PMIX_CLASS_DECLARATION(prte_ras_base_selected_module_t);
+
 
 PRTE_EXPORT extern prte_ras_base_t prte_ras_base;
 
@@ -66,7 +76,7 @@ PRTE_EXPORT void prte_ras_base_display_alloc(prte_job_t *jdata);
 
 PRTE_EXPORT void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist);
 
-PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
+PRTE_EXPORT void prte_ras_base_allocate(int sd, short args, void *cbdata);
 
 PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
 

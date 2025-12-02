@@ -212,6 +212,11 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /* record the number of allocated nodes */
     prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
+    /* flag that the allocation is managed */
+    prte_managed_allocation = true;
+    /* since this is a managed allocation, we do not resolve */
+    prte_do_not_resolve = true;
+
     /* All done */
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,

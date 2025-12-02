@@ -326,27 +326,26 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
  * Function for selecting one component from all those that are
  * available.
  */
-void prte_ras_base_allocate(int fd, short args, void *cbdata)
+void prte_ras_base_allocate(int sd, short args, void *cbdata)
 {
-    int rc;
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
+    int rc;
     pmix_list_t nodes;
     prte_node_t *node;
-    int32_t i, j;
-    prte_app_context_t *app;
-    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    int32_t j;
     char *hosts = NULL, **hostlist;
     char *ptr;
     pmix_status_t ret;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+    prte_ras_base_selected_module_t *active;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    PMIX_ACQUIRE_OBJECT(caddy);
-
-    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output, "%s ras:base:allocate",
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                        "%s ras:base:allocate",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-
-    /* convenience */
     jdata = caddy->jdata;
+
+    // if the allocation is simulated, then we must not launch
     if (prte_ras_base.simulated) {
         prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
                            PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
@@ -364,70 +363,39 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     }
     prte_ras_base.allocation_read = true;
 
-    /* Otherwise, we have to create
-     * the initial set of resources that will delineate all
-     * further operations serviced by this HNP. This list will
-     * contain ALL nodes that can be used by any subsequent job.
-     *
-     * In other words, if a node isn't found in this step, then
-     * no job launched by this HNP will be able to utilize it.
+    /* Discover the allocation, either as provided by a host resource manager
+     * or hostfile or dash-host specification
      */
 
     /* construct a list to hold the results */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
-    /* if a component was selected, then we know we are in a managed
-     * environment.  - the active module will return a list of what it found
-     */
-    if (NULL != prte_ras_base.active_module) {
-        /* read the allocation */
-        if (PRTE_SUCCESS != (rc = prte_ras_base.active_module->allocate(jdata, &nodes))) {
-            if (PRTE_ERR_ALLOCATION_PENDING == rc) {
-                /* an allocation request is underway, so just do nothing */
-                PMIX_DESTRUCT(&nodes);
-                PMIX_RELEASE(caddy);
-                return;
-            }
-            if (PRTE_ERR_SYSTEM_WILL_BOOTSTRAP == rc) {
-                /* this module indicates that nodes will be discovered
-                 * on a bootstrap basis, so all we do here is add our
-                 * own node to the list
-                 */
-                goto addlocal;
-            }
-            if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
-                /* we have an active module, but it is unable to
-                 * allocate anything for this job - this indicates
-                 * that it isn't a fatal error, but could be if
-                 * an allocation is required
-                 */
-                if (prte_allocation_required) {
-                    /* an allocation is required, so this is fatal */
-                    PMIX_DESTRUCT(&nodes);
-                    pmix_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-                    PMIX_RELEASE(caddy);
-                    return;
-                } else {
-                    /* an allocation is not required, so we can just
-                     * run on the local node - go add it
-                     */
-                    goto addlocal;
-                }
-            }
-            PRTE_ERROR_LOG(rc);
-            PMIX_DESTRUCT(&nodes);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
+    /* cycle through the active components */
+    PMIX_LIST_FOREACH(active, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
+        if (NULL == active->module->allocate) {
+            continue;
         }
+        /* read the allocation */
+        rc = active->module->allocate(jdata, &nodes);
+        if (PRTE_SUCCESS == rc) {
+            // got it
+            break;
+        }
+        if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+            /* we have an active module, but it is unable to
+             * allocate anything for this job
+             */
+            continue;
+        }
+        PRTE_ERROR_LOG(rc);
+        PMIX_DESTRUCT(&nodes);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
+        PMIX_RELEASE(caddy);
+        return;
     }
-    /* If something came back, save it and we are done */
+
+    /* If something was found, then we are done */
     if (!pmix_list_is_empty(&nodes)) {
-        /* flag that the allocation is managed */
-        prte_managed_allocation = true;
-        /* since this is a managed allocation, we do not resolve */
-        prte_do_not_resolve = true;
         /* if we are not retaining FQDN hostnames, then record
          * aliases where appropriate */
         PMIX_LIST_FOREACH(node, &nodes, prte_node_t) {
@@ -459,10 +427,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         }
         PMIX_DESTRUCT(&nodes);
         goto DISPLAY;
-    } else if (prte_allocation_required) {
-        /* if nothing was found, and an allocation is
-         * required, then error out
-         */
+    }
+
+    // nothing was found, so see if that's okay
+     if (prte_allocation_required) {
+        /* an allocation is required, so this is fatal */
         PMIX_DESTRUCT(&nodes);
         pmix_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
@@ -471,196 +440,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     }
 
     PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                         "%s ras:base:allocate nothing found in module - proceeding to hostfile",
+                         "%s ras:base:allocate nothing found in modules - adding local",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    /* nothing was found, or no active module was alive. We first see
-     * if we were given a rank/seqfile - if so, use it as the hosts will be
-     * taken from the mapping */
-    hosts = NULL;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING) &&
-        NULL != hosts) {
-        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                             "%s ras:base:allocate parsing rank/seqfile %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
-
-        /* a rank/seqfile was provided - parse it */
-        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
-            PMIX_DESTRUCT(&nodes);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            free(hosts);
-            return;
-        }
-        free(hosts);
-    }
-
-    /* if something was found in the rankfile, we use that as our global
-     * pool - set it and we are done
-     */
-    if (!pmix_list_is_empty(&nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
-        }
-        /* Record that the rankfile mapping policy has been selected */
-        PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_GIVEN);
-        PRTE_SET_MAPPING_POLICY(prte_rmaps_base.mapping, PRTE_MAPPING_BYUSER);
-        /* rankfile is considered equivalent to an RM allocation */
-        if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
-            PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
-        }
-        /* cleanup */
-        PMIX_DESTRUCT(&nodes);
-        goto DISPLAY;
-    }
-
-    /* if a dash-host has been provided, aggregate across all the
-     * app_contexts. Any hosts the user wants to add via comm_spawn
-     * can be done so using the add_host option */
-    for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
-            continue;
-        }
-        hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
-            NULL != hosts) {
-            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                                 "%s ras:base:allocate adding dash_hosts",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, true))) {
-                free(hosts);
-                PMIX_DESTRUCT(&nodes);
-                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-                PMIX_RELEASE(caddy);
-                return;
-            }
-            free(hosts);
-        }
-    }
-
-    /* if something was found in the dash-host(s), we use that as our global
-     * pool - set it and we are done
-     */
-    if (!pmix_list_is_empty(&nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
-        }
-        /* cleanup */
-        PMIX_DESTRUCT(&nodes);
-        goto DISPLAY;
-    }
-
-    /* Our next option is to look for a hostfile and assign our global
-     * pool from there.
-     *
-     * Individual hostfile names, if given, are included
-     * in the app_contexts for this job. We therefore need to
-     * retrieve the app_contexts for the job, and then cycle
-     * through them to see if anything is there. The parser will
-     * add the nodes found in each hostfile to our list - i.e.,
-     * the resulting list contains the UNION of all nodes specified
-     * in hostfiles from across all app_contexts
-     *
-     * Note that any relative node syntax found in the hostfiles will
-     * generate an error in this scenario, so only non-relative syntax
-     * can be present
-     */
-    for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
-            continue;
-        }
-        hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
-            NULL != hosts) {
-            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                                 "%s ras:base:allocate adding hostfile %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
-
-            /* hostfile was specified - parse it and add it to the list */
-            hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
-            free(hosts);
-            for (j=0; NULL != hostlist[j]; j++) {
-                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hostlist[j]))) {
-                    PMIX_ARGV_FREE_COMPAT(hostlist);
-                    PMIX_DESTRUCT(&nodes);
-                    /* set an error event */
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-                    PMIX_RELEASE(caddy);
-                    return;
-                }
-            }
-            PMIX_ARGV_FREE_COMPAT(hostlist);
-        }
-    }
-
-    /* if something was found in the hostfiles(s), we use that as our global
-     * pool - set it and we are done
-     */
-    if (!pmix_list_is_empty(&nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
-        }
-        /* cleanup */
-        PMIX_DESTRUCT(&nodes);
-        goto DISPLAY;
-    }
-
-    /* if nothing was found so far, then look for a default hostfile */
-    if (NULL != prte_default_hostfile) {
-        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                             "%s ras:base:allocate parsing default hostfile %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_default_hostfile));
-
-        /* a default hostfile was provided - parse it */
-        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, prte_default_hostfile))) {
-            PMIX_DESTRUCT(&nodes);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
-        }
-    }
-
-    /* if something was found in the default hostfile, we use that as our global
-     * pool - set it and we are done
-     */
-    if (!pmix_list_is_empty(&nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            PMIX_RELEASE(caddy);
-            return;
-        }
-        /* cleanup */
-        PMIX_DESTRUCT(&nodes);
-        goto DISPLAY;
-    }
-
-    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                         "%s ras:base:allocate nothing found in hostfiles - inserting current node",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-
-addlocal:
     /* if nothing was found by any of the above methods, then we have no
      * earthly idea what to do - so just add the local host
      */

@@ -51,8 +51,8 @@
  * Global variables
  */
 prte_ras_base_t prte_ras_base = {
+    .selected_modules = PMIX_LIST_STATIC_INIT,
     .allocation_read = false,
-    .active_module = NULL,
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
@@ -79,10 +79,7 @@ static int ras_register(pmix_mca_base_register_flag_t flags)
 
 static int prte_ras_base_close(void)
 {
-    /* Close selected component */
-    if (NULL != prte_ras_base.active_module) {
-        prte_ras_base.active_module->finalize();
-    }
+    PMIX_LIST_DESTRUCT(&prte_ras_base.selected_modules);
 
     return pmix_mca_base_framework_components_close(&prte_ras_base_framework, NULL);
 }
@@ -93,6 +90,8 @@ static int prte_ras_base_close(void)
  *    */
 static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
+    PMIX_CONSTRUCT(&prte_ras_base.selected_modules, pmix_list_t);
+
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }
@@ -101,3 +100,19 @@ PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, ras, "PRTE Resource Allocation Subsystem",
                                 prte_ras_base_open, prte_ras_base_close,
                                 prte_ras_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+
+static void mcon(prte_ras_base_selected_module_t *p)
+{
+    p->module = NULL;
+    p->component = NULL;
+}
+static void mdes(prte_ras_base_selected_module_t *p)
+{
+    if (NULL != p->module && NULL != p->module->finalize) {
+        p->module->finalize();
+    }
+}
+
+PMIX_CLASS_INSTANCE(prte_ras_base_selected_module_t,
+                    pmix_list_item_t,
+                    mcon, mdes);
