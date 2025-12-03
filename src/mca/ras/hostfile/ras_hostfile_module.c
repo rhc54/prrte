@@ -56,46 +56,46 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
 
-#include "ras_slurm.h"
+#include "ras_hostfile.h"
 #include "src/mca/ras/base/ras_private.h"
 
-#define PRTE_SLURM_DYN_MAX_SIZE 256
+#define PRTE_HOSTFILE_DYN_MAX_SIZE 256
 
 /*
  * API functions
  */
 static int init(void);
-static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes);
+static int prte_ras_hostfile_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
-static int prte_ras_slurm_finalize(void);
+static int prte_ras_hostfile_finalize(void);
 
 /*
- * RAS slurm module
+ * RAS hostfile module
  */
-prte_ras_base_module_t prte_ras_slurm_module = {
+prte_ras_base_module_t prte_ras_hostfile_module = {
     .init = init,
-    .allocate = prte_ras_slurm_allocate,
+    .allocate = prte_ras_hostfile_allocate,
     .deallocate = deallocate,
-    .finalize = prte_ras_slurm_finalize
+    .finalize = prte_ras_hostfile_finalize
 };
 
 /* Local functions */
-static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist);
-static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***nodelist);
-static int prte_ras_slurm_parse_range(char *base, char *range, char ***nodelist);
+static int prte_ras_hostfile_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist);
+static int prte_ras_hostfile_parse_ranges(char *base, char *ranges, char ***nodelist);
+static int prte_ras_hostfile_parse_range(char *base, char *range, char ***nodelist);
 
 static bool check_taint(char *name, char *evar)
 {
     int n;
 
-    for (n=0; n < prte_mca_ras_slurm_component.max_length; n++) {
+    for (n=0; n < prte_mca_ras_hostfile_component.max_length; n++) {
         if ('\0' == evar[n]) {
             return false;
         }
     }
 
-    pmix_show_help("help-ras-slurm.txt", "tainted-envar", true,
-                   name, prte_mca_ras_slurm_component.max_length);
+    pmix_show_help("help-ras-hostfile.txt", "tainted-envar", true,
+                   name, prte_mca_ras_hostfile_component.max_length);
     return true;
 }
 
@@ -110,44 +110,44 @@ static int init(void)
  * requested number of nodes/process slots to the job.
  *
  */
-static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
+static int prte_ras_hostfile_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret, cpus_per_task;
     char *regexp;
     char *tasks_per_node, *node_tasks;
     char *tmp;
-    char *slurm_jobid;
+    char *hostfile_jobid;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    if (NULL == (slurm_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (hostfile_jobid = getenv("HOSTFILE_JOBID"))) {
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    regexp = getenv("SLURM_NODELIST");
+    regexp = getenv("HOSTFILE_NODELIST");
     if (NULL == regexp) {
-        pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
+        pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-not-found", 1, "HOSTFILE_NODELIST");
         return PRTE_ERR_NOT_FOUND;
     }
     // check for length violation - untaint the envar value
-    if (check_taint("SLURM_NODELIST", regexp)) {
+    if (check_taint("HOSTFILE_NODELIST", regexp)) {
         return PRTE_ERR_BAD_PARAM;
     }
 
-    if (prte_mca_ras_slurm_component.use_all) {
+    if (prte_mca_ras_hostfile_component.use_all) {
         /* this is an oddball case required for debug situations where
          * a tool is started that will then call mpirun. In this case,
-         * Slurm will assign only 1 tasks/per node to the tool, but
+         * Hostfile will assign only 1 tasks/per node to the tool, but
          * we want mpirun to use the entire allocation. They don't give
          * us a specific variable for this purpose, so we have to fudge
          * a bit - but this is a special edge case, and we'll live with it */
-        tasks_per_node = getenv("SLURM_JOB_CPUS_PER_NODE");
+        tasks_per_node = getenv("HOSTFILE_JOB_CPUS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
-                           "SLURM_JOB_CPUS_PER_NODE");
+            pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-not-found", 1,
+                           "HOSTFILE_JOB_CPUS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
-        if (check_taint("SLURM_JOB_CPUS_PER_NODE", tasks_per_node)) {
+        if (check_taint("HOSTFILE_JOB_CPUS_PER_NODE", tasks_per_node)) {
             return PRTE_ERR_BAD_PARAM;
         }
 
@@ -160,14 +160,14 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     } else {
         /* get the number of process slots we were assigned on each node */
-        tasks_per_node = getenv("SLURM_TASKS_PER_NODE");
+        tasks_per_node = getenv("HOSTFILE_TASKS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
-                           "SLURM_TASKS_PER_NODE");
+            pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-not-found", 1,
+                           "HOSTFILE_TASKS_PER_NODE");
             return PRTE_ERR_NOT_FOUND;
         }
-        if (check_taint("SLURM_TASKS_PER_NODE", tasks_per_node)) {
+        if (check_taint("HOSTFILE_TASKS_PER_NODE", tasks_per_node)) {
             return PRTE_ERR_BAD_PARAM;
         }
 
@@ -177,17 +177,17 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        /* get the number of CPUs per task that the user provided to slurm */
-        tmp = getenv("SLURM_CPUS_PER_TASK");
+        /* get the number of CPUs per task that the user provided to hostfile */
+        tmp = getenv("HOSTFILE_CPUS_PER_TASK");
         if (NULL != tmp) {
-            if (check_taint("SLURM_CPUS_PER_TASK", tmp)) {
+            if (check_taint("HOSTFILE_CPUS_PER_TASK", tmp)) {
                 free(node_tasks);
                 return PRTE_ERR_BAD_PARAM;
             }
             cpus_per_task = atoi(tmp);
             if (0 >= cpus_per_task) {
                 pmix_output(0,
-                            "ras:slurm:allocate: Got bad value from SLURM_CPUS_PER_TASK. "
+                            "ras:hostfile:allocate: Got bad value from HOSTFILE_CPUS_PER_TASK. "
                             "Variable was: %s\n",
                             tmp);
                 PRTE_ERROR_LOG(PRTE_ERROR);
@@ -199,11 +199,11 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         }
     }
 
-    ret = prte_ras_slurm_discover(regexp, node_tasks, nodes);
+    ret = prte_ras_hostfile_discover(regexp, node_tasks, nodes);
     free(node_tasks);
     if (PRTE_SUCCESS != ret) {
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s ras:slurm:allocate: discover failed!",
+                             "%s ras:hostfile:allocate: discover failed!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         return ret;
     }
@@ -213,7 +213,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /* All done */
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                         "%s ras:slurm:allocate: success", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s ras:hostfile:allocate: success", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return PRTE_SUCCESS;
 }
 
@@ -223,7 +223,7 @@ static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
     return;
 }
 
-static int prte_ras_slurm_finalize(void)
+static int prte_ras_hostfile_finalize(void)
 {
     return PRTE_SUCCESS;
 }
@@ -231,19 +231,19 @@ static int prte_ras_slurm_finalize(void)
 /**
  * Discover the available resources.
  *
- * In order to fully support slurm, we need to be able to handle
+ * In order to fully support hostfile, we need to be able to handle
  * node regexp/task_per_node strings such as:
  * foo,bar    5,3
  * foo        5
  * foo[2-10,12,99-105],bar,foobar[3-11] 2(x10),5,100(x16)
  *
- * @param *regexp A node regular expression from SLURM (i.e. SLURM_NODELIST)
- * @param *tasks_per_node A tasks per node expression from SLURM
- *                        (i.e. SLURM_TASKS_PER_NODE)
+ * @param *regexp A node regular expression from HOSTFILE (i.e. HOSTFILE_NODELIST)
+ * @param *tasks_per_node A tasks per node expression from HOSTFILE
+ *                        (i.e. HOSTFILE_TASKS_PER_NODE)
  * @param *nodelist A list which has already been constucted to return
  *                  the found nodes in
  */
-static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist)
+static int prte_ras_hostfile_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist)
 {
     int i, j, len, ret, count, reps, num_nodes;
     char *base, **names = NULL;
@@ -259,7 +259,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
     }
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                         "%s ras:slurm:allocate:discover: checking nodelist: %s",
+                         "%s ras:hostfile:allocate:discover: checking nodelist: %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), regexp));
 
     do {
@@ -288,8 +288,8 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         }
         if (i == 0) {
             /* we found a special character at the beginning of the string */
-            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
-                           tasks_per_node, "SLURM_NODELIST");
+            pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-bad-value", 1, regexp,
+                           tasks_per_node, "HOSTFILE_NODELIST");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(orig);
             return PRTE_ERR_BAD_PARAM;
@@ -305,17 +305,17 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             }
             if (j >= len) {
                 /* we didn't find the end of the range */
-                pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
-                               tasks_per_node, "SLURM_NODELIST");
+                pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-bad-value", 1, regexp,
+                               tasks_per_node, "HOSTFILE_NODELIST");
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 free(orig);
                 return PRTE_ERR_BAD_PARAM;
             }
 
-            ret = prte_ras_slurm_parse_ranges(base, base + i + 1, &names);
+            ret = prte_ras_hostfile_parse_ranges(base, base + i + 1, &names);
             if (PRTE_SUCCESS != ret) {
-                pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
-                               tasks_per_node, "SLURM_NODELIST");
+                pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-bad-value", 1, regexp,
+                               tasks_per_node, "HOSTFILE_NODELIST");
                 PRTE_ERROR_LOG(ret);
                 free(orig);
                 return ret;
@@ -330,7 +330,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             /* If we didn't find a range, just add the node */
 
             PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                                 "%s ras:slurm:allocate:discover: found node %s",
+                                 "%s ras:hostfile:allocate:discover: found node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), base));
 
             if (PRTE_SUCCESS != (ret = PMIX_ARGV_APPEND_NOSIZE_COMPAT(&names, base))) {
@@ -377,14 +377,14 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
         /**
          * TBP: it seems like it would be an error to have more slot
-         * descriptions than nodes. Turns out that this valid, and SLURM will
+         * descriptions than nodes. Turns out that this valid, and HOSTFILE will
          * return such a thing. For instance, if I did:
          * srun -A -N 30 -w odin001
-         * I would get SLURM_NODELIST=odin001 SLURM_TASKS_PER_NODE=4(x30)
+         * I would get HOSTFILE_NODELIST=odin001 HOSTFILE_TASKS_PER_NODE=4(x30)
          * That is, I am allocated 30 nodes, but since I only requested
          * one specific node, that's what is in the nodelist.
          * I'm not sure this is what users would expect, but I think it is
-         * more of a SLURM issue than a prte issue, since SLURM is OK with it,
+         * more of a HOSTFILE issue than a prte issue, since HOSTFILE is OK with it,
          * I'm ok with it
          */
         for (i = 0; i < reps && j < num_nodes; i++) {
@@ -396,8 +396,8 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         } else if (*endptr == '\0' || j >= num_nodes) {
             break;
         } else {
-            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
-                           tasks_per_node, "SLURM_TASKS_PER_NODE");
+            pmix_show_help("help-ras-hostfile.txt", "hostfile-env-var-bad-value", 1, regexp,
+                           tasks_per_node, "HOSTFILE_TASKS_PER_NODE");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(slots);
             free(orig);
@@ -413,7 +413,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         prte_node_t *node;
 
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s ras:slurm:allocate:discover: adding node %s (%d slot%s)",
+                             "%s ras:hostfile:allocate:discover: adding node %s (%d slot%s)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), names[i], slots[i],
                              (1 == slots[i]) ? "" : "s"));
 
@@ -445,7 +445,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
  *                 (i.e. "1-3,10" or "5" or "9,0100-0130,250")
  * @param ***names An argv array to add the newly discovered nodes to
  */
-static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
+static int prte_ras_hostfile_parse_ranges(char *base, char *ranges, char ***names)
 {
     int i, len, ret;
     char *start, *orig;
@@ -456,7 +456,7 @@ static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
     for (orig = start = ranges, i = 0; i < len; ++i) {
         if (',' == ranges[i]) {
             ranges[i] = '\0';
-            ret = prte_ras_slurm_parse_range(base, start, names);
+            ret = prte_ras_hostfile_parse_range(base, start, names);
             if (PRTE_SUCCESS != ret) {
                 PRTE_ERROR_LOG(ret);
                 return ret;
@@ -470,10 +470,10 @@ static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
     if (start < orig + len) {
 
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s ras:slurm:allocate:discover: parse range %s (2)",
+                             "%s ras:hostfile:allocate:discover: parse range %s (2)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), start));
 
-        ret = prte_ras_slurm_parse_range(base, start, names);
+        ret = prte_ras_hostfile_parse_range(base, start, names);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             return ret;
@@ -492,7 +492,7 @@ static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
  * @param *ranges  A pointer to a single range. (i.e. "1-3" or "5")
  * @param ***names An argv array to add the newly discovered nodes to
  */
-static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
+static int prte_ras_hostfile_parse_range(char *base, char *range, char ***names)
 {
     char *str, temp1[BUFSIZ];
     size_t i, j, start, end;
