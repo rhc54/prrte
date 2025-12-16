@@ -29,11 +29,6 @@
 #include <unistd.h>
 
 #define SR1_PJOBS
-#if PRTE_TESTBUILD_LAUNCHERS
-#include "testbuild_lsf.h"
-#else
-#include <lsf/lsbatch.h>
-#endif
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
@@ -48,6 +43,16 @@
 #include "ras_lsf.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/base/ras_private.h"
+
+#if PRTE_TESTBUILD_LAUNCHERS
+static int lsb_getalloc(char ***hostlist) {
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostlist, "server1.sample.com");
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostlist, "server12.sample.com");
+    return 2;
+}
+#else
+#include <lsf/lsbatch.h>
+#endif
 
 /*
  * Local functions

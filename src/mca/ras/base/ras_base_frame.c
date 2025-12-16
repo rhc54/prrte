@@ -93,6 +93,7 @@ static int prte_ras_base_close(void)
  *    */
 static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
+    pmix_output(0, "OPENING COMPONENTS");
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }
