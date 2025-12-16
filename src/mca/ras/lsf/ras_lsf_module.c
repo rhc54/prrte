@@ -44,15 +44,6 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/base/ras_private.h"
 
-#if PRTE_TESTBUILD_LAUNCHERS
-static int lsb_getalloc(char ***hostlist) {
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostlist, "server1.sample.com");
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostlist, "server12.sample.com");
-    return 2;
-}
-#else
-#include <lsf/lsbatch.h>
-#endif
 
 /*
  * Local functions
@@ -78,11 +69,15 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* get the list of allocated nodes */
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist, "server1.sample.com");
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist, "server12.sample.com");
+num_nodes = 2;
+#if 0
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
         pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
-
+#endif
     node = NULL;
 
     /* step through the list */

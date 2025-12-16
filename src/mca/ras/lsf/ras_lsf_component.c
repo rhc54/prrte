@@ -31,14 +31,6 @@
 
 #include "ras_lsf.h"
 
-#if PRTE_TESTBUILD_LAUNCHERS
-static int lsb_init(char *str) {
-    PRTE_HIDE_UNUSED_PARAMS(str);
-    return -1;
-}
-#else
-#include <lsf/lsbatch.h>
-#endif
 
 /*
  * Local functions
@@ -82,7 +74,7 @@ static int prte_mca_ras_lsf_component_query(pmix_mca_base_module_t **module, int
 {
     pmix_output(0, "CHECKING");
     /* check if lsf is running here */
-    if (NULL == getenv("LSB_JOBID") || lsb_init("PRTE launcher") < 0) {
+    if (NULL == getenv("LSB_JOBID")) {
         /* nope, not here */
         *module = NULL;
         return PRTE_ERROR;
