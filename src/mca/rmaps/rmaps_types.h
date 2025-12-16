@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -145,6 +145,7 @@ typedef struct {
  * so the values match the corresponding
  * levels in src/hwloc/hwloc-internal.h
  */
+#define PRTE_MAPPING_NONE        0
 #define PRTE_MAPPING_BYNODE      1
 #define PRTE_MAPPING_BYNUMA      2
 #define PRTE_MAPPING_BYPACKAGE   3
@@ -159,15 +160,15 @@ typedef struct {
 #define PRTE_MAPPING_PELIST     11
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRTE_MAPPING_RR         16
-#define PRTE_MAPPING_LIKWID     17
 
 /* sequential policy */
 #define PRTE_MAPPING_SEQ        20
 #define PRTE_MAPPING_COLOCATE   21
 /* rank file and other user-defined mapping */
 #define PRTE_MAPPING_BYUSER     22
+#define PRTE_MAPPING_LSFAFFIN   23
 /* pattern-based mapping */
-#define PRTE_MAPPING_PPR        23
+#define PRTE_MAPPING_PPR        24
 /* macro to separate out the mapping policy
  * from the directives
  */

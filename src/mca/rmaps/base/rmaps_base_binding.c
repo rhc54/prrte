@@ -393,9 +393,9 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                         prte_hwloc_base_print_binding(jdata->map->binding), jdata->map->binding);
 
     if (PRTE_MAPPING_BYUSER == options->map ||
-        PRTE_MAPPING_LIKWID == options->map) {
-        /* user specified binding by rankfile or it was computed
-         * by the likwid mapper - nothing for us to do */
+        PRTE_MAPPING_LSFAFFIN == options->map) {
+        /* user specified binding by rankfile or by the
+         * lsf affinity mapper - nothing for us to do */
         return PRTE_SUCCESS;
     }
 

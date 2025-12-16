@@ -33,6 +33,7 @@
 #include "src/mca/base/pmix_mca_base_framework.h"
 
 #include "src/mca/ras/ras.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_printf.h"
 /*
@@ -58,6 +59,8 @@ typedef struct prte_ras_base_t {
     int multiplier;
     bool launch_orted_on_hn;
     bool simulated;
+    /* mapper required by this RM */
+    prte_mapping_policy_t mapper;
 } prte_ras_base_t;
 
 PRTE_EXPORT extern prte_ras_base_t prte_ras_base;

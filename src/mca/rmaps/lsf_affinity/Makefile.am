@@ -25,42 +25,31 @@
 #
 
 EXTRA_DIST = \
-        help-rmaps_rank_file.txt
-
-AM_LFLAGS = -Pprte_rmaps_rank_file_
-LEX_OUTPUT_ROOT = lex.prte_rmaps_rank_file_
-
-# we do NOT want picky compilers down here due to flex
-CFLAGS = $(PMIX_CFLAGS_BEFORE_PICKY)
+        help-rmaps_lsf_affinity.txt
 
 sources = \
-        rmaps_rank_file.c \
-        rmaps_rank_file.h \
-        rmaps_rank_file_component.c \
-        rmaps_rank_file_lex.l \
-        rmaps_rank_file_lex.h
+        rmaps_lsf_affinity.c \
+        rmaps_lsf_affinity.h \
+        rmaps_lsf_affinity_component.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prte_rmaps_rank_file_DSO
+if MCA_BUILD_prte_rmaps_lsf_affinity_DSO
 component_noinst =
-component_install = prte_mca_rmaps_rank_file.la
+component_install = prte_mca_rmaps_lsf_affinity.la
 else
-component_noinst = libprtemca_rmaps_rank_file.la
+component_noinst = libprtemca_rmaps_lsf_affinity.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-prte_mca_rmaps_rank_file_la_SOURCES = $(sources)
-prte_mca_rmaps_rank_file_la_LDFLAGS = -module -avoid-version
-prte_mca_rmaps_rank_file_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_rmaps_lsf_affinity_la_SOURCES = $(sources)
+prte_mca_rmaps_lsf_affinity_la_LDFLAGS = -module -avoid-version
+prte_mca_rmaps_lsf_affinity_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libprtemca_rmaps_rank_file_la_SOURCES =$(sources)
-libprtemca_rmaps_rank_file_la_LDFLAGS = -module -avoid-version
-
-maintainer-clean-local:
-	rm -f rmaps_rank_file_lex.c
+libprtemca_rmaps_lsf_affinity_la_SOURCES =$(sources)
+libprtemca_rmaps_lsf_affinity_la_LDFLAGS = -module -avoid-version

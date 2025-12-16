@@ -52,25 +52,18 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file_lex.h"
+#include "src/mca/rmaps/lsf_affinity/rmaps_lsf_affinity.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_show_help.h"
 
-static int prte_rmaps_rf_map(prte_job_t *jdata,
-                             prte_rmaps_options_t *options);
+static int lsf_affinity_map(prte_job_t *jdata,
+                            prte_rmaps_options_t *options);
 
-prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
-    .map_job = prte_rmaps_rf_map
+prte_rmaps_base_module_t prte_rmaps_lsf_affinity_module = {
+    .map_job = lsf_affinity_map
 };
 
-static int prte_rmaps_rank_file_parse(const char *);
-static char *prte_rmaps_rank_file_parse_string_or_int(void);
-
-static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile);
-static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_rmaps_options_t *options, char *affinity_file);
-
-char *prte_rmaps_rank_file_slot_list = NULL;
+static int file_parse(const char *);
 
 #if PMIX_NUMERIC_VERSION < 0x00040205
 static char *pmix_getline(FILE *fp)
@@ -98,8 +91,8 @@ static int num_ranks = 0;
 /*
  * Create a rank_file  mapping for the job.
  */
-static int prte_rmaps_rf_map(prte_job_t *jdata,
-                             prte_rmaps_options_t *options)
+static int lsf_affinity_map(prte_job_t *jdata,
+                            prte_rmaps_options_t *options)
 {
     prte_app_context_t *app = NULL;
     int32_t i, k;
@@ -107,14 +100,13 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     prte_node_t *node, *nd, *root_node;
     pmix_rank_t rank, vpid_start;
     int32_t num_slots;
-    prte_rmaps_rank_file_map_t *rfmap;
+    prte_rmaps_lsf_affinity_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_mca_rmaps_rank_file_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_lsf_affinity_component.super;
     char *slots = NULL;
     bool initial_map = true;
-    char *rankfile = NULL;
     char *affinity_file = NULL;
     hwloc_cpuset_t proc_bitmap, bitmap;
     char *cpu_bitmap;
@@ -125,55 +117,43 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s being restarted - rank_file cannot map",
+                            "mca:rmaps:lsf_affinity: job %s being restarted - lsf_affinity cannot map",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    /* check to see if any mapping or binding directives were given */
-    if (!(PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) &&
-        !(PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
-        if (NULL != (affinity_file = getenv("LSB_AFFINITY_HOSTFILE"))) {
-            /* Process the affinity hostfile (if valid) and update jdata
-             * structure approprately.
-             */
-            prte_rmaps_rf_process_lsf_affinity_hostfile(jdata, options, affinity_file);
-        }
-    }
-    if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
-        /* a mapper has been specified, and it isn't me */
-        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s not using rank_file mapper",
-                            PRTE_JOBID_PRINT(jdata->nspace));
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
-    if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    if (PRTE_MAPPING_LSFAFFIN != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* NOT FOR US */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s not using rankfile policy",
+                            "mca:rmaps:lsf_affinity: job %s not using lsf_affinity policy",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (options->ordered) {
         /* NOT FOR US */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s binding order requested - rank_file cannot map",
+                            "mca:rmaps:lsf_affinity: job %s binding order requested - lsf_affinity cannot map",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &rankfile, PMIX_STRING)
-        || NULL == rankfile) {
-        /* we cannot do it */
+    affinity_file = getenv("LSB_AFFINITY_HOSTFILE");
+    if (NULL == affinity_file) {
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s no rankfile specified",
-                            PRTE_JOBID_PRINT(jdata->nspace));
-        return PRTE_ERR_BAD_PARAM;
+                            "mca:rmaps:lsf_affinity: affinity file not given in environment");
+        return PRTE_ERR_NOT_FOUND;
     }
 
     physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+    /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    options->use_hwthreads = true;
+    /* don't override something provided by the user, but default to bind-to hwthread */
+    if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
+        PRTE_SET_BINDING_POLICY(prte_hwloc_default_binding_policy, PRTE_BIND_TO_HWTHREAD);
+    }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:rank_file: mapping job %s", PRTE_JOBID_PRINT(jdata->nspace));
+                        "mca:rmaps:lsf_affinity: mapping job %s",
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -195,9 +175,17 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     vpid_start = 0;
     jdata->num_procs = 0;
     PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
+    rc = pmix_pointer_array_init(&rankmap,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DESTRUCT(&rankmap);
+        return PRTE_ERROR;
+    }
 
-    /* parse the rankfile, storing its results in the rankmap */
-    if (PRTE_SUCCESS != (rc = prte_rmaps_rank_file_parse(rankfile))) {
+    /* parse the affinity, storing its results in the rankmap */
+    if (PRTE_SUCCESS != (rc = file_parse(affinity_file))) {
         rc = PRTE_ERR_SILENT;
         goto error;
     }
@@ -222,19 +210,20 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
 
-        /* set the number of procs to the number of entries in that rankfile */
+        /* set the number of procs to the number of entries in that affinity_file */
         if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_COMPUTED)) {
             app->num_procs = num_ranks;
             if (0 == app->num_procs) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, affinity_file);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
         }
+
         for (k = 0; k < app->num_procs; k++) {
             rank = vpid_start + k;
             /* get the rankfile entry for this rank */
-            rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap, rank);
+            rfmap = (prte_rmaps_lsf_affinity_map_t *) pmix_pointer_array_get_item(&rankmap, rank);
             if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
                 if (NULL != options->cpuset) {
@@ -245,7 +234,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 } else {
                     /* all ranks must be specified */
                     pmix_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank,
-                                   rankfile);
+                                   affinity_file);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -381,7 +370,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
                 } else if (PRTE_ERROR == rc) {
-                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, affinity_file);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(proc_bitmap);
                     goto error;
@@ -459,236 +448,39 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         }
     }
     PMIX_DESTRUCT(&rankmap);
-    if (NULL != rankfile) {
-        free(rankfile);
-    }
     /* compute local/app ranks */
     rc = prte_rmaps_base_compute_vpids(jdata, options);
     return rc;
 
 error:
     PMIX_LIST_DESTRUCT(&node_list);
-    if (NULL != rankfile) {
-        free(rankfile);
-    }
 
     return rc;
 }
 
-static int prte_rmaps_rank_file_parse(const char *rankfile)
+static int file_parse(const char *affinity_file)
 {
-    int token;
     int rc = PRTE_SUCCESS;
-    int cnt;
-    char *node_name = NULL;
-    char **argv;
-    char buff[RMAPS_RANK_FILE_MAX_SLOTS];
-    char *value;
-    int rank = -1;
-    int i;
-    prte_node_t *hnp_node;
-    prte_rmaps_rank_file_map_t *rfmap = NULL;
+    int i, j;
+    prte_rmaps_lsf_affinity_map_t *rfmap = NULL;
     pmix_pointer_array_t *assigned_ranks_array;
-    char tmp_rank_assignment[RMAPS_RANK_FILE_MAX_SLOTS];
+    struct stat buf;
+    FILE *fp;
+    char *hstname, *membind_opt;
+    char *sep, *eptr, **cpus;
+    prte_node_t *nptr, *node;
+    hwloc_obj_t obj;
 
     /* keep track of rank assignments */
     assigned_ranks_array = PMIX_NEW(pmix_pointer_array_t);
-
-    /* get the hnp node's info */
-    hnp_node = (prte_node_t *) (prte_node_pool->addr[0]);
-
-    prte_rmaps_rank_file_done = false;
-    prte_rmaps_rank_file_in = fopen(rankfile, "r");
-
-    if (NULL == prte_rmaps_rank_file_in) {
-        pmix_show_help("help-rmaps_rank_file.txt", "no-rankfile", true,
-                       prte_tool_basename, rankfile, prte_tool_basename);
-        rc = PRTE_ERR_NOT_FOUND;
-        goto unlock;
+    rc = pmix_pointer_array_init(assigned_ranks_array,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_RELEASE(assigned_ranks_array);
+        return PRTE_ERROR;
     }
-
-    while (!prte_rmaps_rank_file_done) {
-        token = prte_rmaps_rank_file_lex();
-
-        switch (token) {
-        case PRTE_RANKFILE_ERROR:
-            pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_QUOTED_STRING:
-            pmix_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true,
-                           "QUOTED_STRING", rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_NEWLINE:
-            rank = -1;
-            if (NULL != node_name) {
-                free(node_name);
-            }
-            node_name = NULL;
-            rfmap = NULL;
-            break;
-        case PRTE_RANKFILE_RANK:
-            token = prte_rmaps_rank_file_lex();
-            if (PRTE_RANKFILE_INT == token) {
-                rank = prte_rmaps_rank_file_value.ival;
-                rfmap = PMIX_NEW(prte_rmaps_rank_file_map_t);
-                pmix_pointer_array_set_item(&rankmap, rank, rfmap);
-                num_ranks++; // keep track of number of provided ranks
-            } else {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            break;
-        case PRTE_RANKFILE_USERNAME:
-            pmix_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true, "USERNAME",
-                           rankfile);
-            rc = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(rc);
-            goto unlock;
-        case PRTE_RANKFILE_EQUAL:
-            if (rank < 0) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-            token = prte_rmaps_rank_file_lex();
-            switch (token) {
-            case PRTE_RANKFILE_HOSTNAME:
-            case PRTE_RANKFILE_IPV4:
-            case PRTE_RANKFILE_IPV6:
-            case PRTE_RANKFILE_STRING:
-            case PRTE_RANKFILE_INT:
-            case PRTE_RANKFILE_RELATIVE:
-                if (PRTE_RANKFILE_INT == token) {
-                    snprintf(buff,RMAPS_RANK_FILE_MAX_SLOTS,  "%d", prte_rmaps_rank_file_value.ival);
-                    value = buff;
-                } else {
-                    value = prte_rmaps_rank_file_value.sval;
-                }
-                argv = PMIX_ARGV_SPLIT_COMPAT(value, '@');
-                cnt = PMIX_ARGV_COUNT_COMPAT(argv);
-                if (NULL != node_name) {
-                    free(node_name);
-                }
-                if (1 == cnt) {
-                    node_name = strdup(argv[0]);
-                } else if (2 == cnt) {
-                    node_name = strdup(argv[1]);
-                } else {
-                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    PMIX_ARGV_FREE_COMPAT(argv);
-                    node_name = NULL;
-                    goto unlock;
-                }
-                PMIX_ARGV_FREE_COMPAT(argv);
-
-                // Strip off the FQDN if present, ignore IP addresses
-                if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
-                    char *ptr;
-                    if (NULL != (ptr = strchr(node_name, '.'))) {
-                        *ptr = '\0';
-                    }
-                }
-
-                /* check the rank item */
-                if (NULL == rfmap) {
-                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_BAD_PARAM;
-                    PRTE_ERROR_LOG(rc);
-                    goto unlock;
-                }
-                /* check if this is the local node */
-                if (prte_check_host_is_local(node_name)) {
-                    rfmap->node_name = strdup(hnp_node->name);
-                } else {
-                    rfmap->node_name = strdup(node_name);
-                }
-            }
-            break;
-        case PRTE_RANKFILE_SLOT:
-            if (NULL == node_name || rank < 0
-                || NULL == (value = prte_rmaps_rank_file_parse_string_or_int())) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                goto unlock;
-            }
-
-            /* check for a duplicate rank assignment */
-            if (NULL != pmix_pointer_array_get_item(assigned_ranks_array, rank)) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-assign", true, rank,
-                               pmix_pointer_array_get_item(assigned_ranks_array, rank), rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                free(value);
-                goto unlock;
-            } else {
-                /* prepare rank assignment string for the help message in case of a bad-assign */
-                snprintf(tmp_rank_assignment, RMAPS_RANK_FILE_MAX_SLOTS, "%s slot=%s", node_name, value);
-                pmix_pointer_array_set_item(assigned_ranks_array, 0, tmp_rank_assignment);
-            }
-
-            /* check the rank item */
-            if (NULL == rfmap) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                rc = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(rc);
-                free(value);
-                goto unlock;
-            }
-            for (i = 0; i < RMAPS_RANK_FILE_MAX_SLOTS && '\0' != value[i]; i++) {
-                rfmap->slot_list[i] = value[i];
-            }
-            free(value);
-            break;
-        }
-    }
-    fclose(prte_rmaps_rank_file_in);
-    prte_rmaps_rank_file_lex_destroy();
-
-unlock:
-    if (NULL != node_name) {
-        free(node_name);
-    }
-    PMIX_RELEASE(assigned_ranks_array);
-    return rc;
-}
-
-static char *prte_rmaps_rank_file_parse_string_or_int(void)
-{
-    int rc;
-    char tmp_str[RMAPS_RANK_FILE_MAX_SLOTS];
-
-    if (PRTE_RANKFILE_EQUAL != prte_rmaps_rank_file_lex()) {
-        return NULL;
-    }
-
-    rc = prte_rmaps_rank_file_lex();
-    switch (rc) {
-    case PRTE_RANKFILE_STRING:
-        return strdup(prte_rmaps_rank_file_value.sval);
-    case PRTE_RANKFILE_INT:
-        snprintf(tmp_str, RMAPS_RANK_FILE_MAX_SLOTS, "%d", prte_rmaps_rank_file_value.ival);
-        return strdup(tmp_str);
-    default:
-        return NULL;
-    }
-}
-
-static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
-                                                       prte_rmaps_options_t *options,
-                                                       char *affinity_file)
-{
-    char *aff_rankfile = NULL;
-    struct stat buf;
-    int rc;
 
     /* check to see if the file is empty - if it is,
      * then affinity wasn't actually set for this job */
@@ -701,109 +493,9 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
         return PRTE_SUCCESS;
     }
 
-    /* the affinity file sequentially lists rank locations, with
-     * cpusets given as physical cpu-ids. Setup the job object
-     * so it knows to process this accordingly */
-    if (NULL == jdata->map) {
-        jdata->map = PMIX_NEW(prte_job_map_t);
-    }
-
-    /* We need to use the rank file mapper since each line in the affinity
-     * file is the specification for a single rank.
-     */
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
-    jdata->map->req_mapper = strdup("rank_file");
-
-    /*
-     * Ranking is also determined by the rank file that we generate
-     */
-    options->userranked = true;
-    PRTE_SET_MAPPING_POLICY(jdata->map->ranking, PRTE_RANKING_BYUSER);
-
-    /* Setup a temporary hostfile with logical cpu-ids converted from the the physical
-     * cpu-ids provided by LSF. Further convert the format to match the rankfile
-     *  - https://github.com/openpmix/prrte/pull/580 removed support for Physical CPU IDs
-     *
-     * LSF Provides a "LSF_BINDIR/openmpi_rankfile.sh" script to convert the
-     * format of the LSB_AFFINITY_HOSTFILE to a rankfile. However, it does not
-     * adjust the CPU IDs. So we need a custom function to do this.
-     */
-    rc = prte_rmaps_rf_lsf_convert_affinity_to_rankfile(affinity_file, &aff_rankfile);
-    if (PRTE_SUCCESS != rc ) {
-        pmix_show_help("help-rmaps_rank_file.txt", "lsf-affinity-file-failed-convert", true, affinity_file);
-        return PRTE_ERR_SILENT;
-    }
-    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:rf: (lsf) Converted LSB_AFFINITY_HOSTFILE to rankfile %s",
-                        aff_rankfile);
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL, aff_rankfile, PMIX_STRING);
-
-    /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-    options->use_hwthreads = true;
-    /* don't override something provided by the user, but default to bind-to hwthread */
-    if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
-        PRTE_SET_BINDING_POLICY(prte_hwloc_default_binding_policy, PRTE_BIND_TO_HWTHREAD);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-static bool quickmatch(prte_node_t *nd, char *name)
-{
-    int n;
-
-    if (0 == strcmp(nd->name, name)) {
-        return true;
-    }
-    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
-        (0 == strcmp(name, "localhost") ||
-         0 == strcmp(name, "127.0.0.1"))) {
-        return true;
-    }
-    if (NULL != nd->aliases) {
-        for (n=0; NULL != nd->aliases[n]; n++) {
-            if (0 == strcmp(nd->aliases[n], name)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile)
-{
-    FILE *fp;
-    int fp_rank, cur_rank = 0;
-    char *hstname = NULL;
-    char *sep, *eptr, *membind_opt;
-    char *tmp_str = NULL;
-    size_t len;
-    char **cpus;
-    int i, j;
-    hwloc_obj_t obj;
-    prte_node_t *node, *nptr;
-
-    if( NULL != *aff_rankfile) {
-        free(*aff_rankfile);
-    }
-
-    // session dir + / (1) + lsf_rf. (7) + XXXXXX (6) + \0 (1)
-    len = strlen(prte_process_info.top_session_dir) + 1 + 7 + 6 + 1;
-    (*aff_rankfile) = (char*) malloc(sizeof(char) * len);
-    snprintf(*aff_rankfile, len, "%s/lsf_rf.XXXXXX", prte_process_info.top_session_dir);
-
     /* open the file */
     fp = fopen(affinity_file, "r");
     if (NULL == fp) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    fp_rank = mkstemp((*aff_rankfile));
-    if (-1 == fp_rank) {
-        fclose(fp);
-        free((*aff_rankfile));
-        (*aff_rankfile) = NULL;
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -819,6 +511,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
             /* Comment line - ignore */
             continue;
         }
+        pmix_output(0, "HSTNAME %s", hstname);
         if (NULL != (sep = strchr(hstname, ' '))) {
             *sep = '\0';
             sep++;
@@ -849,7 +542,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
 
         // Convert the Physical CPU set from LSF to a Hwloc logical CPU set
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: (lsf) Convert Physical CPUSET from <%s>", sep);
+                            "mca:rmaps:lsf_affinity: (lsf) Convert Physical CPUSET from <%s>", sep);
 
         // find the named host
         nptr = NULL;
@@ -858,7 +551,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
             if (NULL == node) {
                 continue;
             }
-            if (quickmatch(node, hstname)) {
+            if (prte_quickmatch(node, hstname)) {
                 nptr = node;
                 break;
             }
@@ -869,7 +562,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
                            "resource-not-found", true,
                            hstname);
             fclose(fp);
-            close(fp_rank);
+            free(hstname);
             return PRTE_ERROR;
         }
 
@@ -880,7 +573,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
             if (NULL == obj) {
                 PMIX_ARGV_FREE_COMPAT(cpus);
                 fclose(fp);
-                close(fp_rank);
+                free(hstname);
                 return PRTE_ERROR;
             }
             free(cpus[i]);
@@ -891,19 +584,18 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         sep = PMIX_ARGV_JOIN_COMPAT(cpus, ',');
         PMIX_ARGV_FREE_COMPAT(cpus);
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: (lsf) Convert Physical CPUSET to   <%s>", sep);
+                            "mca:rmaps:lsf_affinity: (lsf) Convert Physical CPUSET to   <%s>", sep);
 
-        // Format: rank 1=host1 slot=0,1,2,3,4
-        // "rank " (5) + id (max 10) + = (1) + host (?) + " slot=" (6) + ids (?) + '\0' (1)
-        len = 5 + 10 + 1 + strlen(hstname) + 6 + strlen(sep) + 1;
-        tmp_str = (char *)malloc(sizeof(char) * len);
-        snprintf(tmp_str, len, "rank %d=%s slot=%s\n", cur_rank, hstname, sep);
-        pmix_fd_write(fp_rank, strlen(tmp_str), tmp_str);
-        free(tmp_str);
-        ++cur_rank;
+        rfmap = PMIX_NEW(prte_rmaps_lsf_affinity_map_t);
+        rfmap->node_name = hstname;
+        snprintf(rfmap->slot_list, RMAPS_LSF_AFFINITY_MAX_SLOTS, "%s", sep);
+        pmix_pointer_array_set_item(&rankmap, num_ranks, rfmap);
+        num_ranks++; // keep track of number of provided ranks
+        pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps:lsf_affinity: Adding node %s cpus %s", rfmap->node_name, rfmap->slot_list);
+
     }
     fclose(fp);
-    close(fp_rank);
 
     return PRTE_SUCCESS;
 }

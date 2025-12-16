@@ -27,6 +27,12 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_lsf.h"
+#else
+#include <lsf/lsbatch.h>
+#endif
+
 #include "src/mca/base/pmix_base.h"
 
 #include "ras_lsf.h"
@@ -66,20 +72,17 @@ PMIX_MCA_BASE_COMPONENT_INIT(prte, ras, lsf)
  */
 static int prte_ras_lsf_open(void)
 {
-    pmix_output(0, "OPEN");
     return PRTE_SUCCESS;
 }
 
 static int prte_mca_ras_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    pmix_output(0, "CHECKING");
     /* check if lsf is running here */
-    if (NULL == getenv("LSB_JOBID")) {
+    if (NULL == getenv("LSB_JOBID") || lsb_init("PRTE launcher") < 0) {
         /* nope, not here */
         *module = NULL;
         return PRTE_ERROR;
     }
-pmix_output(0, "TAKEN");
     *priority = 75;
     *module = (pmix_mca_base_module_t *) &prte_ras_lsf_module;
     return PRTE_SUCCESS;

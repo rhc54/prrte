@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,6 +118,9 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     }
 
     switch (PRTE_GET_MAPPING_POLICY(mapping)) {
+    case PRTE_MAPPING_NONE:
+        map = "NONE";
+        break;
     case PRTE_MAPPING_BYNODE:
         map = "BYNODE";
         break;
@@ -154,6 +157,9 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     case PRTE_MAPPING_BYUSER:
         map = "BYUSER";
         break;
+    case PRTE_MAPPING_LSFAFFIN:
+        map = "LSF-AFFINITY";
+        break;
     case PRTE_MAPPING_BYDIST:
         map = "MINDIST";
         break;
@@ -162,9 +168,6 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
         break;
     case PRTE_MAPPING_PPR:
         map = "PPR";
-        break;
-    case PRTE_MAPPING_LIKWID:
-        map = "LIKWID";
         break;
     default:
         map = "UNKNOWN";

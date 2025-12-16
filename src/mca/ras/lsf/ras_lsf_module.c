@@ -29,6 +29,11 @@
 #include <unistd.h>
 
 #define SR1_PJOBS
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_lsf.h"
+#else
+#include <lsf/lsbatch.h>
+#endif
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
@@ -62,31 +67,20 @@ prte_ras_base_module_t prte_ras_lsf_module = {
 
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
-    char **nodelist;
+    char **nodelist = NULL;
     prte_node_t *node;
     int i, num_nodes;
-    char *ptr;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    /* get the list of allocated nodes */
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist, "server1.sample.com");
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist, "server12.sample.com");
-num_nodes = 2;
-#if 0
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
         pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
-#endif
+
     node = NULL;
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(nodelist[i])) {
-            if (NULL != (ptr = strchr(nodelist[i], '.'))) {
-                *ptr = '\0';
-            }
-        }
 
         /* is this a repeat of the current node? */
         if (NULL != node && 0 == strcmp(nodelist[i], node->name)) {
@@ -112,6 +106,11 @@ num_nodes = 2;
 
     /* release the nodelist from lsf */
     PMIX_ARGV_FREE_COMPAT(nodelist);
+
+    // set the mapper if affinity has been ordered
+    if (NULL != getenv("LSB_AFFINITY_HOSTFILE")) {
+        PRTE_SET_MAPPING_POLICY(prte_ras_base.mapper, PRTE_MAPPING_LSFAFFIN);
+    }
 
     return PRTE_SUCCESS;
 }

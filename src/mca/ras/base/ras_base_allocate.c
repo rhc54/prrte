@@ -357,16 +357,31 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
                            PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
     }
+    /* construct a list to hold the results */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
     /* if we already did this, don't do it again - the pool of
      * global resources is set.
      */
     if (prte_ras_base.allocation_read) {
-
-        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                             "%s ras:base:allocate allocation already read",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        goto next_state;
+        if (NULL != prte_ras_base.active_module) {
+            // we don't read the host RM's allocation more than once
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                                 "%s ras:base:allocate allocation already read",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            if (PRTE_MAPPING_NONE != PRTE_GET_MAPPING_POLICY(prte_ras_base.mapper)) {
+                if (NULL == jdata->map) {
+                    jdata->map = PMIX_NEW(prte_job_map_t);
+                }
+                if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, prte_ras_base.mapper);
+                }
+            }
+            PMIX_DESTRUCT(&nodes);
+            goto next_state;
+        } else {
+            goto gethosts;
+        }
     }
     prte_ras_base.allocation_read = true;
 
@@ -378,9 +393,6 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * In other words, if a node isn't found in this step, then
      * no job launched by this HNP will be able to utilize it.
      */
-
-    /* construct a list to hold the results */
-    PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
     /* if a component was selected, then we know we are in a managed
      * environment.  - the active module will return a list of what it found
@@ -476,6 +488,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         return;
     }
 
+gethosts:
     PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                          "%s ras:base:allocate nothing found in module - proceeding to hostfile",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

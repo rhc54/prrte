@@ -44,7 +44,6 @@ int prte_ras_base_select(void)
     /*
      * Select the best component
      */
-    pmix_output(0, "SELECTING");
     if (PRTE_SUCCESS
         != pmix_mca_base_select("ras", prte_ras_base_framework.framework_output,
                                 &prte_ras_base_framework.framework_components,

@@ -24,19 +24,19 @@
 
 # MCA_ras_lsf_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prte_ras_lsf_CONFIG],[
-    AC_CONFIG_FILES([src/mca/ras/lsf/Makefile])
+AC_DEFUN([MCA_prte_rmaps_lsf_affinity_CONFIG],[
+    AC_CONFIG_FILES([src/mca/rmaps/lsf_affinity/Makefile])
 
-    PRTE_CHECK_LSF([ras_lsf], [ras_lsf_good=1], [ras_lsf_good=0])
+    PRTE_CHECK_LSF([rmaps_lsf_affinity], [rmaps_lsf_affinity_good=1], [rmaps_lsf_affinity_good=0])
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail
-    AS_IF([test "$ras_lsf_good" = "1" || test "$prte_testbuild_launchers" = "1"],
+    AS_IF([test "$rmaps_lsf_affinity_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 
     # set build flags to use in makefile
-    AC_SUBST([ras_lsf_CPPFLAGS])
-    AC_SUBST([ras_lsf_LDFLAGS])
-    AC_SUBST([ras_lsf_LIBS])
+    AC_SUBST([rmaps_lsf_affinity_CPPFLAGS])
+    AC_SUBST([rmaps_lsf_affinity_LDFLAGS])
+    AC_SUBST([rmaps_lsf_affinity_LIBS])
 ])dnl

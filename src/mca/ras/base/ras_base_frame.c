@@ -29,6 +29,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/ras/base/base.h"
@@ -56,7 +57,8 @@ prte_ras_base_t prte_ras_base = {
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
-    .simulated = false
+    .simulated = false,
+    .mapper = PRTE_MAPPING_NONE
 };
 
 static int ras_register(pmix_mca_base_register_flag_t flags)
@@ -93,7 +95,6 @@ static int prte_ras_base_close(void)
  *    */
 static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
-    pmix_output(0, "OPENING COMPONENTS");
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }
