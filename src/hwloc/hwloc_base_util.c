@@ -477,6 +477,47 @@ int prte_hwloc_base_set_topology(char *topofile)
     return PRTE_SUCCESS;
 }
 
+int prte_hwloc_convert_obj_type(char *type)
+{
+    int len;
+
+    len = strlen(type);
+    if (0 == strncasecmp(type, "node", len)) {
+        return HWLOC_OBJ_MACHINE;
+
+    } else if (0 == strncasecmp(type, "hwthread", len) ||
+               0 == strncasecmp(type, "thread", len)) {
+        return HWLOC_OBJ_PU;
+
+    } else if (0 == strncasecmp(type, "core", len)) {
+        return HWLOC_OBJ_CORE;
+
+    } else if (0 == strncasecmp(type, "package", len) ||
+               0 == strncasecmp(type, "skt", len) ||
+               0 == strncasecmp(type, "socket", len)) {
+        return HWLOC_OBJ_PACKAGE;
+
+    } else if (0 == strncasecmp(type, "numa", len) ||
+               0 == strncasecmp(type, "nm", len)) {
+        return HWLOC_OBJ_NUMANODE;
+
+    } else if (0 == strncasecmp(type, "l1cache", len)) {
+        return HWLOC_OBJ_L1CACHE;
+
+    } else if (0 == strncasecmp(type, "l2cache", len)) {
+        return HWLOC_OBJ_L2CACHE;
+
+    } else if (0 == strncasecmp(type, "l3cache", len)) {
+        return HWLOC_OBJ_L3CACHE;
+
+    } else if (0 == strncasecmp(type, "die", len)) {
+        return HWLOC_OBJ_DIE;
+
+    } else {
+        return HWLOC_OBJ_TYPE_MAX;
+    }
+}
+
 int prte_hwloc_base_report_bind_failure(const char *file, int line, const char *msg, int rc)
 {
     static int already_reported = 0;

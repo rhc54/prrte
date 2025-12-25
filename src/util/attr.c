@@ -277,6 +277,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_PES_PER_PROC";
         case PRTE_APP_PPR:
             return "PRTE_APP_PPR";
+        case PRTE_APP_PPR_OBJECT:
+            return "PRTE_APP_PPR_OBJECT";
+        case PRTE_APP_CPUSET:
+            return "PRTE_APP_CPUSET";
+        case PRTE_APP_ORDERED:
+            return "PRTE_APP_ORDERED";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";

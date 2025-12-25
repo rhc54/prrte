@@ -43,7 +43,7 @@ prte_rmaps_base_module_t prte_rmaps_ppr_module = {
 static int ppr_mapper(prte_job_t *jdata,
                       prte_rmaps_options_t *options)
 {
-    int rc = PRTE_SUCCESS, j, idx, ncpus;
+    int rc = PRTE_SUCCESS, j, idx, ncpus *intptr;
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
@@ -60,6 +60,7 @@ static int ppr_mapper(prte_job_t *jdata,
     prte_binding_policy_t savebind = options->bind;
     uint16_t ppn, pes, *ppnptr, *pesptr;
     uint16_t jobppn, jobpes;
+    hwloc_obj_type_t jobtype;
 
     /* only handle initial launch of loadbalanced
      * or NPERxxx jobs - allow restarting of failed apps
@@ -152,6 +153,7 @@ static int ppr_mapper(prte_job_t *jdata,
     // cache job-level values
     jobppn = options->pprn;
     jobpes = options->cpus_per_rank;
+    jobtype = options->maptype;
     ppnptr = &ppn;
     pesptr = &pes;
 
@@ -172,6 +174,12 @@ static int ppr_mapper(prte_job_t *jdata,
             options->cpus_per_rank = pes;
         } else {
             options->cpus_per_rank = jobpes;
+        }
+        intptr = &j;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR_OBJECT, (void**)&intptr, PMIX_INT) {
+            options->maptype = j;
+        } else {
+            options->maptype = jobtype;
         }
 
         /* get the available nodes */

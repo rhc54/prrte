@@ -67,6 +67,9 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_PES_PER_PROC       24 // uint16_t - number of cpus to be assigned to each process
 #define PRTE_APP_PPR                25 // uint16_t - number of procs to place on the resource specified
                                        //           in the job ppr string
+#define PRTE_APP_PPR_OBJECT         26 // string - target object for ppr
+#define PRTE_APP_CPUSET             27 // string - list of cpus to use for this app
+#define PRTE_APP_ORDERED            28 // bool - pe-list is to be treated as ordered
 
 #define PRTE_APP_MAX_KEY 100
 

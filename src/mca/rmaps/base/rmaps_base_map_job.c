@@ -416,6 +416,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         free(tmp);
     }
 
+    if (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+        options.ordered = true;
+    }
+
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: setting mapping policies for job %s inherit %s hwtcpus %s",
                         PRTE_JOBID_PRINT(jdata->nspace),
@@ -465,7 +469,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
         ck = PMIX_ARGV_SPLIT_COMPAT(tmp, ':');
-        if (2 != PMIX_ARGV_COUNT_COMPAT(ck)) {
+        if (2 > PMIX_ARGV_COUNT_COMPAT(ck)) {
             /* must provide a specification */
             pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, tmp);
             PMIX_ARGV_FREE_COMPAT(ck);
@@ -476,44 +480,41 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         /* compute the #procs per resource */
         options.pprn = strtoul(ck[0], NULL, 10);
-        len = strlen(ck[1]);
-        if (0 == strncasecmp(ck[1], "node", len)) {
-            options.maptype = HWLOC_OBJ_MACHINE;
-            options.mapdepth = PRTE_BIND_TO_NONE;
-        } else if (0 == strncasecmp(ck[1], "hwthread", len) ||
-                   0 == strncasecmp(ck[1], "thread", len)) {
-            options.maptype = HWLOC_OBJ_PU;
-            options.mapdepth = PRTE_BIND_TO_HWTHREAD;
-        } else if (0 == strncasecmp(ck[1], "core", len)) {
-            options.maptype = HWLOC_OBJ_CORE;
-            options.mapdepth = PRTE_BIND_TO_CORE;
-        } else if (0 == strncasecmp(ck[1], "package", len) ||
-                   0 == strncasecmp(ck[1], "skt", len) ||
-                   0 == strncasecmp(ck[1], "socket", len)) {
-            options.maptype = HWLOC_OBJ_PACKAGE;
-            options.mapdepth = PRTE_BIND_TO_PACKAGE;
-        } else if (0 == strncasecmp(ck[1], "numa", len) ||
-                   0 == strncasecmp(ck[1], "nm", len)) {
-            options.maptype = HWLOC_OBJ_NUMANODE;
-            options.mapdepth = PRTE_BIND_TO_NUMA;
-        } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
-            options.maptype = HWLOC_OBJ_L1CACHE;
-            options.mapdepth = PRTE_BIND_TO_L1CACHE;
-        } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
-            options.maptype = HWLOC_OBJ_L2CACHE;
-            options.mapdepth = PRTE_BIND_TO_L2CACHE;
-        } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
-            options.maptype = HWLOC_OBJ_L3CACHE;
-            options.mapdepth = PRTE_BIND_TO_L3CACHE;
-        } else {
-            /* unknown spec */
-            pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
-                           ck[1], tmp);
-            free(tmp);
-            PMIX_ARGV_FREE_COMPAT(ck);
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
+        options.maptype = prte_hwloc_convert_obj_type(ck[1]);
+        switch (options.maptype) {
+            case HWLOC_OBJ_MACHINE:
+                options.mapdepth = PRTE_BIND_TO_NONE;
+                break;
+            case HWLOC_OBJ_PU:
+                options.mapdepth = PRTE_BIND_TO_HWTHREAD;
+                break;
+            case HWLOC_OBJ_CORE:
+                options.mapdepth = PRTE_BIND_TO_CORE;
+                break;
+            case HWLOC_OBJ_PACKAGE:
+                options.mapdepth = PRTE_BIND_TO_PACKAGE;
+                break;
+            case HWLOC_OBJ_NUMANODE:
+                options.mapdepth = PRTE_BIND_TO_NUMA;
+                break;
+            case HWLOC_OBJ_L1CACHE:
+                options.mapdepth = PRTE_BIND_TO_L1CACHE;
+                break;
+            case HWLOC_OBJ_L2CACHE:
+                options.mapdepth = PRTE_BIND_TO_L2CACHE;
+                break;
+            case HWLOC_OBJ_L3CACHE:
+                options.mapdepth = PRTE_BIND_TO_L3CACHE;
+                break;
+            default:
+                /* unknown spec */
+                pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
+                               ck[1], tmp);
+                free(tmp);
+                PMIX_ARGV_FREE_COMPAT(ck);
+                jdata->exit_code = PRTE_ERR_BAD_PARAM;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
         }
         free(tmp);
         PMIX_ARGV_FREE_COMPAT(ck);
@@ -538,7 +539,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             continue;
         }
 
-       if (NULL != options.cpuset) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_CPUSET, (void **) &tmp, PMIX_STRING) &&
+            prte_get_attribute(&app->attributes, PRTE_APP_ORDERED, NULL, PMIX_BOOL)) {
+            ck = PMIX_ARGV_SPLIT_COMPAT(tmp ',');
+            app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
+            PMIX_ARGV_FREE_COMPAT(ck);
+            free(tmp);
+        } else  if (NULL != options.cpuset && options.ordered) {
             ck = PMIX_ARGV_SPLIT_COMPAT(options.cpuset, ',');
             app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
             PMIX_ARGV_FREE_COMPAT(ck);
@@ -615,9 +622,6 @@ ranking:
     options.map = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
         options.mapspan = true;
-    }
-    if (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-        options.ordered = true;
     }
 
     switch (options.map) {

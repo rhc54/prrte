@@ -376,6 +376,8 @@ PRTE_EXPORT void prte_hwloc_build_map(hwloc_topology_t topo,
 
 PRTE_EXPORT bool prte_hwloc_base_core_cpus(hwloc_topology_t topo);
 
+PRTE_EXPORT int prte_hwloc_convert_obj_type(char *type);
+
 END_C_DECLS
 
 #endif /* PRTE_HWLOC_H_ */

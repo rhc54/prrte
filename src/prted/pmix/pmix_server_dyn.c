@@ -820,9 +820,10 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
             } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
                 char **ck, *p;
                 uint16_t ppn, pes;
-                int n;
+                int n, objtype;
                 ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
                 if (3 > PMIX_ARGV_COUNT_COMPAT(ck)) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, info->value.data.string);
                     PMIX_ARGV_FREE_COMPAT(ck);
                     return PMIX_ERR_BAD_PARAM;
                 }
@@ -830,9 +831,11 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     ppn =  strtoul(ck[1], NULL, 10);
                     prte_set_attribute(&app->attributes, PRTE_APP_PPR,
                                        PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
-                    // ck[2] has the object type
+                    objtype = prte_hwloc_convert_obj_type(ck[n+2]);
+                    prte_set_attribute(&app->attributes, PRTE_APP_PPR_OBJECT,
+                                       PRTE_ATTR_GLOBAL, &objtype, PMIX_INT);
                     pes = 0;
-                    for (n=2; NULL != ck[n]; n++) {
+                    for (n=3; NULL != ck[n]; n++) {
                         p = strchr(ck[n], '=');
                         if (NULL != p && 0 == strncmp(ck[n], "pe", 2)) {
                             ++p;
@@ -844,22 +847,75 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                         prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
                                            PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
                     }
-                } 
+                } else {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, info->value.data.string);
+                }
                 PMIX_ARGV_FREE_COMPAT(ck);
- 
+
                 /***   MAP-BY   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
                 char **ck, *p;
                 uint16_t ppn, pes;
-                int n;
+                int n, objtype;
                 ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
                 for (n=0; NULL != ck[n]; n++) {
                     if (0 == strcasecmp(ck[n], "ppr")) {
-                        ppn =  strtoul(ck[1], NULL, 10);
+                        if (NULL == ck[n+1] || NULL == ck[n+2]) {
+                            // missing number and object type
+                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, info->value.data.string);
+                            PMIX_ARGV_FREE_COMPAT(ck);
+                            return PRTE_ERR_SILENT;
+                        }
+                        ppn =  strtoul(ck[n+1], NULL, 10);
                         prte_set_attribute(&app->attributes, PRTE_APP_PPR,
                                            PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
-                    } else if (0 == strncmp(ck[n], "pe", 2) &&
-                               0 != strncmp(ck[n], "pe-", 3)) {
+                        objtype = prte_hwloc_convert_obj_type(ck[n+2]);
+                        prte_set_attribute(&app->attributes, PRTE_APP_PPR_OBJECT,
+                                           PRTE_ATTR_GLOBAL, &objtype, PMIX_INT);
+                        n += 2;  // skip the fields we just parsed
+
+                    } else if (0 == strncmp(ck[n], "pe-list", strlen("pe-list"))) {
+                        char *temp_token, *parm_delimiter;
+                        char **range;
+                        p = strchr(ck[n], '=');
+                       ++p;
+                        if ('\0' == *p) {
+                            /* malformed option */
+                            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                                           true, "mapping", ck[n]);
+                            PMIX_ARGV_FREE_COMPAT(ck);
+                            return PRTE_ERR_SILENT;
+                        }
+                        /* Verify the list is composed of comma-delimited ranges */
+                        temp_token = strtok(p, ",");
+                        while (NULL != temp_token) {
+                            // check for range
+                            range = PMIX_ARGV_SPLIT_COMPAT(temp_token, '-');
+                            if (2 < PMIX_ARGV_COUNT_COMPAT(range)) {
+                                // can only have one '-' delimiter
+                                pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                               "mapping", "PE-LIST", ck[n]);
+                                PMIX_ARGV_FREE_COMPAT(ck);
+                                PMIX_ARGV_FREE_COMPAT(range);
+                                return PRTE_ERR_SILENT;
+                             }
+                             for (i=0; NULL != range[i]; i++) {
+                                (void)strtol(range[i], &parm_delimiter, 10);
+                                if ('\0' != *parm_delimiter) {
+                                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                                   "mapping", "PE-LIST", p);
+                                    PMIX_ARGV_FREE_COMPAT(ck);
+                                    PMIX_ARGV_FREE_COMPAT(range);
+                                    return PRTE_ERR_SILENT;
+                                }
+                            }
+                            PMIX_ARGV_FREE_COMPAT(range);
+                            temp_token = strtok(NULL, ",");
+                        }
+                        prte_set_attribute(&app->attributes, PRTE_APP_CPUSET, PRTE_ATTR_GLOBAL,
+                                           p, PMIX_STRING);
+
+                    } else if (0 == strncmp(ck[n], "pe", 2)) {
                         p = strchr(ck[n], '=');
                         if (NULL == p) {
                             /* missing the value or value is invalid */
@@ -881,6 +937,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                             prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
                                                PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
                         }
+                    } else if (0 == strncmp(ck[n], "ordered", strlen(ck[n]))) {
+                        prte_set_attribute(&app->attributes, PRTE_APP_ORDERED, PRTE_ATTR_GLOBAL,
+                                           NULL, PMIX_BOOL);
                     }
                 }
                 PMIX_ARGV_FREE_COMPAT(ck);
