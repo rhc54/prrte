@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,6 +54,10 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     int rc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_round_robin_component;
     bool initial_map = true;
+    prte_mapping_policy_t jobmtype;
+    uint16_t apptype, *aptptr;
+    uint16_t jobpes, pes, *pesptr;
+    bool jobordered;
 
     /* this mapper can only handle initial launch
      * when rr mapping is desired - allow
@@ -93,6 +97,11 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
 
     /* start at the beginning... */
     jdata->num_procs = 0;
+    jobmtype = options->map;
+    jobpes = options->cpus_per_rank;
+    jobordered = options->ordered;
+    aptptr = &apptype;
+    pesptr = &pes;
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
@@ -116,6 +125,23 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         }
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
+
+        // check for app-level overrides
+        if (prte_get_attribute(&app->attributes, PRTE_APP_MAPTYPE, (void**)&aptptr, PMIX_UINT16)) {
+            options->map = apptype;
+        } else {
+            options->map = jobmtype;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, (void**)&pesptr, PMIX_UINT16)) {
+            options->cpus_per_rank = pes;
+        } else {
+            options->cpus_per_rank = jobpes;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ORDERED, NULL, PMIX_BOOL)) {
+            options->ordered = true;
+        } else {
+            options->ordered = jobordered;
+        }
 
         /* Make assignments */
         if (PRTE_MAPPING_BYNODE == options->map) {

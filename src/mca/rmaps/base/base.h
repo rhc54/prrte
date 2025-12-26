@@ -160,6 +160,8 @@ PRTE_EXPORT int prte_rmaps_base_check_support(prte_job_t *jdata,
                                               prte_node_t *node,
                                               prte_rmaps_options_t *options);
 
+PRTE_EXPORT uint16_t prte_rmaps_convert_maptype(char *type);
+
 END_C_DECLS
 
 #endif

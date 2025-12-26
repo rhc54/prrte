@@ -155,7 +155,45 @@ PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmap
                                 prte_rmaps_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, pmix_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
+                    pmix_list_item_t, NULL, NULL);
+
+
+uint16_t prte_rmaps_convert_maptype(char *type)
+{
+    if (0 == strncasecmp(type, "node", strlen(type))) {
+        return PRTE_MAPPING_BYNODE;
+    }
+    if (0 == strncasecmp(type, "numa", strlen(type))) {
+        return PRTE_MAPPING_BYNUMA;
+    }
+    if (0 == strncasecmp(type, "package", strlen(type)) ||
+        0 == strncasecmp(type, "pkg", strlen(type)) ||
+        0 == strncasecmp(type, "socket", strlen(type)) ||
+        0 == strncasecmp(type, "skt", strlen(type))) {
+        return PRTE_MAPPING_BYPACKAGE;
+    }
+    if (0 == strncasecmp(type, "l3cache", strlen(type))) {
+        return PRTE_MAPPING_BYL3CACHE;
+    }
+    if (0 == strncasecmp(type, "l2cache", strlen(type))) {
+        return PRTE_MAPPING_BYL2CACHE;
+    }
+    if (0 == strncasecmp(type, "l1cache", strlen(type))) {
+        return PRTE_MAPPING_BYL1CACHE;
+    }
+    if (0 == strncasecmp(type, "core", strlen(type))) {
+        return PRTE_MAPPING_BYCORE;
+    }
+    if (0 == strncasecmp(type, "hwthread", strlen(type)) ||
+        0 == strncasecmp(type, "ht", strlen(type))) {
+        return PRTE_MAPPING_BYHWTHREAD;
+    }
+    if (0 == strncasecmp(type, "slot", strlen(type))) {
+        return PRTE_MAPPING_BYSLOT;
+    }
+    return UINT16_MAX;
+}
 
 static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *tmp)
 {

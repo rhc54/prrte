@@ -70,7 +70,7 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_PPR_OBJECT         26 // int - target hwloc_obj_type for ppr
 #define PRTE_APP_CPUSET             27 // string - list of cpus to use for this app
 #define PRTE_APP_ORDERED            28 // bool - pe-list is to be treated as ordered
-#define PRTE_APP_MAP_OBJECT         29 // int - target hwloc_obj_type for round-robin object
+#define PRTE_APP_MAPTYPE            29 // uint16_t - target maptype for round-robin mapper
 
 #define PRTE_APP_MAX_KEY 100
 

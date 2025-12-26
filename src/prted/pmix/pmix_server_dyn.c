@@ -735,6 +735,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     bool flag;
     pmix_envar_t envar;
     char cwd[PRTE_PATH_MAX];
+    uint16_t maptype;
 
     app = PMIX_NEW(prte_app_context_t);
     app->job = (struct prte_job_t*)jdata;
@@ -914,6 +915,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                         }
                         prte_set_attribute(&app->attributes, PRTE_APP_CPUSET, PRTE_ATTR_GLOBAL,
                                            p, PMIX_STRING);
+                        maptype = PRTE_MAPPING_PELIST;
+                        prte_set_attribute(&app->attributes, PRTE_APP_MAPTYPE, PRTE_ATTR_GLOBAL,
+                                           &maptype, PMIX_UINT16);
 
                     } else if (0 == strncmp(ck[n], "pe", 2)) {
                         p = strchr(ck[n], '=');
@@ -932,7 +936,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                             PMIX_ARGV_FREE_COMPAT(ck);
                             return PRTE_ERR_SILENT;
                         }
-                        pes = strtol(p, NULL, 10);                
+                        pes = strtol(p, NULL, 10);
                         if (0 < pes) {
                             prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
                                                PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
@@ -941,13 +945,13 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                         prte_set_attribute(&app->attributes, PRTE_APP_ORDERED, PRTE_ATTR_GLOBAL,
                                            NULL, PMIX_BOOL);
                     } else {
-                        objtype = prte_hwloc_convert_obj_type(ck[n]);
-                        if (HWLOC_OBJ_TYPE_MAX == objtype) {
-                            // not a hwloc object type
+                        maptype = prte_rmaps_convert_maptype(ck[n]);
+                        if (UINT16_MAX == maptype) {
+                            // unknown type or something else
                             continue;
                         }
-                        prte_set_attribute(&app->attributes, PRTE_APP_MAP_OBJECT, PRTE_ATTR_GLOBAL,
-                                           &objtype, PMIX_INT);
+                        prte_set_attribute(&app->attributes, PRTE_APP_MAPTYPE, PRTE_ATTR_GLOBAL,
+                                           &maptype, PMIX_UINT16);
                     }
                 }
                 PMIX_ARGV_FREE_COMPAT(ck);
