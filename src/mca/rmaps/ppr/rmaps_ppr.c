@@ -43,7 +43,7 @@ prte_rmaps_base_module_t prte_rmaps_ppr_module = {
 static int ppr_mapper(prte_job_t *jdata,
                       prte_rmaps_options_t *options)
 {
-    int rc = PRTE_SUCCESS, j, idx, ncpus *intptr;
+    int rc = PRTE_SUCCESS, j, idx, ncpus, *intptr;
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
@@ -176,7 +176,7 @@ static int ppr_mapper(prte_job_t *jdata,
             options->cpus_per_rank = jobpes;
         }
         intptr = &j;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR_OBJECT, (void**)&intptr, PMIX_INT) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR_OBJECT, (void**)&intptr, PMIX_INT)) {
             options->maptype = j;
         } else {
             options->maptype = jobtype;

@@ -541,7 +541,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
         if (prte_get_attribute(&app->attributes, PRTE_APP_CPUSET, (void **) &tmp, PMIX_STRING) &&
             prte_get_attribute(&app->attributes, PRTE_APP_ORDERED, NULL, PMIX_BOOL)) {
-            ck = PMIX_ARGV_SPLIT_COMPAT(tmp ',');
+            ck = PMIX_ARGV_SPLIT_COMPAT(tmp, ',');
             app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
             PMIX_ARGV_FREE_COMPAT(ck);
             free(tmp);

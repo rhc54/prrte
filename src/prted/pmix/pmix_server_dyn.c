@@ -899,7 +899,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                                 PMIX_ARGV_FREE_COMPAT(range);
                                 return PRTE_ERR_SILENT;
                              }
-                             for (i=0; NULL != range[i]; i++) {
+                             for (int i=0; NULL != range[i]; i++) {
                                 (void)strtol(range[i], &parm_delimiter, 10);
                                 if ('\0' != *parm_delimiter) {
                                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
