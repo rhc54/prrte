@@ -831,7 +831,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     ppn =  strtoul(ck[1], NULL, 10);
                     prte_set_attribute(&app->attributes, PRTE_APP_PPR,
                                        PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
-                    objtype = prte_hwloc_convert_obj_type(ck[n+2]);
+                    objtype = prte_hwloc_convert_obj_type(ck[2]);
                     prte_set_attribute(&app->attributes, PRTE_APP_PPR_OBJECT,
                                        PRTE_ATTR_GLOBAL, &objtype, PMIX_INT);
                     pes = 0;
@@ -940,6 +940,14 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     } else if (0 == strncmp(ck[n], "ordered", strlen(ck[n]))) {
                         prte_set_attribute(&app->attributes, PRTE_APP_ORDERED, PRTE_ATTR_GLOBAL,
                                            NULL, PMIX_BOOL);
+                    } else {
+                        objtype = prte_hwloc_convert_obj_type(ck[n]);
+                        if (HWLOC_OBJ_TYPE_MAX == objtype) {
+                            // not a hwloc object type
+                            continue;
+                        }
+                        prte_set_attribute(&app->attributes, PRTE_APP_MAP_OBJECT, PRTE_ATTR_GLOBAL,
+                                           &objtype, PMIX_INT);
                     }
                 }
                 PMIX_ARGV_FREE_COMPAT(ck);

@@ -283,6 +283,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_CPUSET";
         case PRTE_APP_ORDERED:
             return "PRTE_APP_ORDERED";
+        case PRTE_APP_MAP_OBJECT:
+            return "PRTE_APP_MAP_OBJECT";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";
