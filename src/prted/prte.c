@@ -154,6 +154,15 @@ static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
         lock->msg = strdup(nspace);
     }
     PRTE_PMIX_WAKEUP_THREAD(lock);
+    /* The spawn completion is awaited in prte() by spinning prte_event_base
+     * with PRTE_EVLOOP_ONCE rather than blocking on the lock's condition
+     * variable, because the event base must keep running for the spawn to be
+     * processed. This callback, however, fires on the PMIx progress thread,
+     * so merely releasing the lock can be missed: the spin loop may be
+     * idle-blocked inside prte_event_loop with no other pending event and thus
+     * never re-check lock->active, hanging the launch. Kick the base so the
+     * loop wakes and observes the released lock. */
+    prte_event_base_loopexit(prte_event_base);
 }
 
 static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
