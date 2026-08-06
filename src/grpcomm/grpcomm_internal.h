@@ -140,6 +140,19 @@ PRTE_EXPORT int prte_grpcomm_bruck_step(size_t pos, size_t nprocs, size_t step,
 PRTE_EXPORT int prte_grpcomm_chunk_bounds(size_t total, size_t nparts, size_t idx,
                                           size_t *off, size_t *len);
 
+/* Who is either side of `me` in a ring over `parts` (ascending rank order).
+ * Both out-params are set to PMIX_RANK_INVALID on every failure and on a ring
+ * of one; with exactly two participants they are the same rank.  Returns
+ * PRTE_ERR_NOT_FOUND when `me` is not in the list - an ordinary state for a
+ * daemon relaying a fence it is not part of, not an error.
+ *
+ * The property that matters and that the unit test pins: every participant's
+ * right neighbour must name it as *its* left neighbour.  If that fails, one
+ * daemon waits forever for a blob nobody was ever going to send it. */
+PRTE_EXPORT int prte_grpcomm_ring_neighbors(const pmix_rank_t *parts, size_t nparts,
+                                            pmix_rank_t me, pmix_rank_t *left,
+                                            pmix_rank_t *right);
+
 /* Which participant's block ends up in local slot `slot`.  Bruck leaves the
  * blocks rotated - slot 0 is always our own - so a caller that wants natural
  * order has to undo that through this mapping rather than assume it.
@@ -168,6 +181,7 @@ PRTE_EXPORT size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t sl
  * instead of hanging. */
 #define PRTE_GRPCOMM_FENCE_TREE_GATHER  0u  /* up-tree rollup, broadcast release */
 #define PRTE_GRPCOMM_FENCE_RD_ALLGATHER 1u  /* lateral exchange, no release */
+#define PRTE_GRPCOMM_FENCE_NEIGHBOR     2u  /* ring share, empty rollup+release */
 
 /* Not a movement: the value grpcomm_fence_movement=auto resolves to, meaning
  * "decide per fence from PMIX_COLLECT_DATA". It is deliberately outside the
@@ -324,6 +338,8 @@ typedef struct {
     uint32_t movement;
     // Exchange state, used only by rd_allgather. NULL under the rollup.
     struct fence_exchange_t *xch;
+    // Ring-neighbor state, used only by neighbor_share. NULL otherwise.
+    struct fence_neighbors_t *nbrs;
     /* controls values */
     int timeout;
     // the controller arms a timer for "timeout" seconds once a participant
@@ -462,6 +478,17 @@ void prte_grpcomm_fence_xch_free(prte_grpcomm_fence_t *coll);
 /* A fence's lateral allgather: blocks from an exchange partner. */
 PRTE_EXPORT extern
 void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
+                                      pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tg, void *cbdata);
+
+/* Release a fence tracker's ring-neighbor state. Exported for the same
+ * reason the exchange's teardown is. */
+PRTE_EXPORT extern
+void prte_grpcomm_fence_nbr_free(prte_grpcomm_fence_t *coll);
+
+/* A fence's ring share: one neighbor's whole contribution. */
+PRTE_EXPORT extern
+void prte_grpcomm_fence_neighbor_recv(int status, pmix_proc_t *sender,
                                       pmix_data_buffer_t *buffer,
                                       prte_rml_tag_t tg, void *cbdata);
 

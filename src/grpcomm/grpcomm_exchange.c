@@ -117,6 +117,48 @@ int prte_grpcomm_chunk_bounds(size_t total, size_t nparts, size_t idx,
     return PRTE_SUCCESS;
 }
 
+int prte_grpcomm_ring_neighbors(const pmix_rank_t *parts, size_t nparts,
+                                pmix_rank_t me, pmix_rank_t *left,
+                                pmix_rank_t *right)
+{
+    size_t mypos = SIZE_MAX;
+
+    if (NULL == left || NULL == right) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* An answer on every path, so a caller that ignores the return value
+     * still gets "no neighbors" rather than whatever was on its stack. */
+    *left = PMIX_RANK_INVALID;
+    *right = PMIX_RANK_INVALID;
+
+    if (NULL == parts || 0 == nparts) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    for (size_t i = 0; i < nparts; i++) {
+        if (parts[i] == me) {
+            mypos = i;
+            break;
+        }
+    }
+    if (SIZE_MAX == mypos) {
+        /* not a participant - an ordinary state for a daemon relaying a
+         * fence it is not in, and not an error */
+        return PRTE_ERR_NOT_FOUND;
+    }
+    if (2 > nparts) {
+        /* a ring of one has no neighbors */
+        return PRTE_SUCCESS;
+    }
+    /* Wrapping, so the ring closes.  With exactly two participants both
+     * neighbors are the same daemon, which is deliberate and is what the
+     * caller's send-once test keys on - reporting one side as INVALID
+     * instead would make "who do I owe a blob to" and "who do I expect one
+     * from" different questions. */
+    *left = parts[(mypos + nparts - 1) % nparts];
+    *right = parts[(mypos + 1) % nparts];
+    return PRTE_SUCCESS;
+}
+
 size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t slot)
 {
     if (1 > nprocs || slot >= nprocs) {

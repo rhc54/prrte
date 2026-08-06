@@ -131,6 +131,7 @@ static void ccon(prte_grpcomm_fence_t *p)
      * contribution instead adopts whatever that contribution asserts. */
     p->movement = PRTE_GRPCOMM_FENCE_TREE_GATHER;
     p->xch = NULL;
+    p->nbrs = NULL;
     p->timeout = 0;
     p->tev_active = false;
     p->cbfunc = NULL;
@@ -151,6 +152,7 @@ static void cdes(prte_grpcomm_fence_t *p)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
     prte_grpcomm_fence_xch_free(p);
+    prte_grpcomm_fence_nbr_free(p);
     if (NULL != p->dmns) {
         free(p->dmns);
     }

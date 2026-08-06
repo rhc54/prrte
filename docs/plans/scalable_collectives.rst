@@ -834,6 +834,102 @@ off by default for the same reason ``--verify`` is: a get perturbs the
 collective beside it. That is not theoretical here - it was measured, and it
 cost an afternoon.
 
+Piece 5 — the ring share, and a fence that delivers almost nothing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The measurement above says the interesting lever is not a faster allgather but
+how much of the modex never needs to move. ``neighbor_share`` is that lever,
+implemented: a third fence movement, selected by
+``grpcomm_fence_movement neighbor``.
+
+Each daemon sends its own contribution to the two daemons either side of it in
+the participant ring - ``coll->dmns`` in ascending rank order - on
+``PRTE_RML_TAG_FENCE_NEIGHBOR``, and rolls up to the controller only the fact
+that it took part. The controller broadcasts an equally empty release. The
+tree still carries the *synchronization*, which is what a fence is for; it
+carries none of the data. Everything a process asks for that its own daemon
+does not hold comes back through direct modex.
+
+Three properties make it work, and none of them needed anything new:
+
+* **``PMIx_server_dmodex_request()`` takes no key.** It answers with the
+  target proc's whole remote+global set and the requesting server stores all
+  of it, so the first ``PMIx_Get`` of a peer pays one round trip and every
+  later key from that peer is local. This is what makes a fence that delivers
+  almost nothing workable rather than merely cheap.
+* **``PMIX_LOCAL``-scope data was never in the picture.** A put at local scope
+  is stored in the client peer's own GDS; ``pmix_server_collect_data()`` asks
+  only for ``PMIX_REMOTE``, so local-scope data has never been circulated by
+  any movement, and local peers read it through the ordinary server GET path.
+  ``PMIX_GLOBAL`` lands in both stores and *is* circulated.
+* **The ring is derived, not carried.** Same argument as the exchange: every
+  daemon computes it from the same signature through the same
+  ``create_dmns()``.
+
+Holding both neighbours' blobs is part of *converging*, not of the release: a
+daemon does not report participation upward until it has them, so the release
+cannot be issued before every daemon holds what it is owed. That is what makes
+the guarantee deterministic - after this fence you *have* your neighbours'
+data - and it is free, because every send went out when its sender entered the
+fence, so the wait is one hop overlapping the rollup. It cannot deadlock,
+because sending never waits on receiving.
+
+Measured on the same swarm, same knobs, one DVM per movement - COLLECT median
+in microseconds, radix 2, one proc per node, five iterations:
+
+=====  ========  ======  ===========  ==========  ==============
+N      KB/rank   tree    allgather    neighbor    neighbor/tree
+=====  ========  ======  ===========  ==========  ==============
+8      8         3347    4065         1460        0.44
+8      128       10220   11995        5620        0.55
+16     8         11046   13101        3420        0.31
+16     128       37413   57398        12948       0.35
+=====  ========  ======  ===========  ==========  ==============
+
+The ratio *improves* with node count (0.44 to 0.31 at 8 KB a rank), which is
+the shape to expect: the rollup's cost grows with N and the ring's does not.
+
+The barrier column is worth reading too. Forcing a movement forces it onto
+barriers as well, and the ring's two extra one-hop messages cost nothing
+measurable - 695us against the rollup's 775us at 8 nodes, 1660us against
+1780us at 16 - while the forced exchange collapses under one (12673us at 16
+nodes and 128 KB a rank, because a barrier still carries eight bytes and the
+exchange still runs its full schedule for them). That is a fair warning about
+what ``auto`` would have to keep doing, not an argument about the ring.
+
+Two honest caveats on the numbers. Part of the win is that each daemon now
+holds 3/N of the modex rather than all of it, and this host is small enough
+for that to matter - the memory-bound effect documented in the harness guide
+is real here. It is not a confound in the sense of measuring something else:
+moving fewer bytes and holding fewer bytes are the same cause. But the
+magnitude on a laptop may flatter it relative to a real cluster. And the
+harness's ``collected_bytes`` column is computed on the assumption that every
+daemon ends up holding everything, so under this movement it over-states what
+is actually held by a factor of about N/3; the memory guard is therefore
+conservative rather than wrong.
+
+**Correctness was checked separately from cost**, because the whole point of
+this movement is that it delivers less. ``scaletest --verify`` now reads a key
+from *two* peers per iteration: a NEAR one (rank+1, which the ring already
+holds) and a FAR one (half the job away, reachable only through direct modex).
+Both come back for all three movements at 8 and 16 nodes. A verify that
+checked only the near peer would pass with the on-demand path completely
+broken, which is exactly the shape of bug this movement can introduce.
+
+**What is deliberately not built.** Widening the share - neighbours plus one
+level up and down the tree - is the obvious next dial, and the movement is
+shaped so that it is a change to the ring computation and the convergence test
+and nothing else. It should not be widened speculatively: the ring is the
+cheapest thing that covers the neighbour-exchange pattern real applications
+use, and every extra hop is bytes moved on a guess.
+
+**And it is not reachable from ``auto``.** Unlike ``tree`` and ``allgather``,
+this movement changes what a fence *delivers*, not merely how it travels - a
+caller that set ``PMIX_COLLECT_DATA`` does not get the whole modex back. That
+is legal (``PMIx_Get`` falls back to direct modex, which is why FAR verifies)
+but it is a semantic change, so it stays opt-in until it has been measured
+against a real MPI application rather than against a synthetic client.
+
 Verification
 ------------
 

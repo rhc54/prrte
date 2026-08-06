@@ -628,10 +628,22 @@ lateral links on `PRTE_RML_TAG_FENCE_EXCHANGE`, after which every daemon
 already holds the result and **there is no release at all**. That is the
 point: for a modex it is the release fanout, not the gather, that dominates.
 
-Selected by `grpcomm_fence_movement` (`tree` / `allgather` / `auto`),
-defaulting to **`auto`**, which reads `PMIX_COLLECT_DATA` out of the fence
-upcall's info array — a barrier keeps the rollup, a modex gets the exchange.
-`tree` reverts to the old behaviour in one flag.
+`neighbor_share` stops trying to put the whole modex on every node at all.
+Each daemon hands its own contribution straight to the two daemons either side
+of it in the participant ring, on `PRTE_RML_TAG_FENCE_NEIGHBOR`, and the tree
+carries only the *fact* that it took part: an empty aggregate up, an empty
+release down. Anything a process then asks for that its own daemon does not
+hold is fetched on demand by direct modex — which returns that proc's entire
+published set in one round trip, so the second key from the same peer is free.
+See *The ring share* below.
+
+Selected by `grpcomm_fence_movement`
+(`tree` / `allgather` / `neighbor` / `auto`), defaulting to **`auto`**, which
+reads `PMIX_COLLECT_DATA` out of the fence upcall's info array — a barrier
+keeps the rollup, a modex gets the exchange. `tree` reverts to the old
+behaviour in one flag. `neighbor` is **not** yet reachable from `auto`: it
+changes what a fence *delivers*, not merely how, so it is opt-in until it has
+been measured against a real application (see the design record).
 
 The scalable path is the default deliberately: a movement nobody selects is a
 movement nobody tests, and what goes wrong here — a fence that cannot converge
@@ -653,6 +665,67 @@ caller's info array verbatim and the server forwards it. PRRTE long believed
 otherwise. Note also that "is `ndata` zero" is *not* a substitute: a pure
 barrier arrives with eight bytes, so a size test would call every barrier a
 modex.)
+
+### The ring share
+
+The first two movements differ only in *how* the whole modex reaches every
+node. The third asks whether it should.
+
+Both of the others move O(N) bytes onto every node whether or not anybody
+there will read them, and at scale most of what that buys is never touched: a
+rank talks to a handful of peers, not to all of them. So `neighbor_share`
+moves each daemon's contribution exactly two hops sideways — to the daemons
+either side of it in the participant ring — and lets everything else be
+fetched on demand.
+
+What makes that affordable is a property PMIx already had:
+**`PMIx_server_dmodex_request()` takes no key.** It answers with the target
+proc's entire remote+global set in one round trip, and the requesting server
+stores the whole blob, so the first `PMIx_Get` of a peer pays a round trip and
+every subsequent key from that peer is local. Nothing in PRRTE had to change
+for this; it is the reason a fence that delivers nothing is still workable.
+
+Three things about the implementation are load-bearing:
+
+- **The ring is the participant list, not the routing tree.** `coll->dmns` in
+  ascending rank order, which every daemon derives from the same signature
+  through the same `create_dmns()` — so, as with the exchange, there is no ring
+  to carry on the wire, and no daemon whose opinion is authoritative, which is
+  why the movement id travels and a disagreement is reported.
+
+- **Holding both neighbors' blobs is part of converging, not of the release.**
+  A daemon does not report participation upward until it has them, so by the
+  time the controller can issue the release every daemon already holds what it
+  is owed. That makes the guarantee deterministic — *after this fence you have
+  your neighbors' data* — rather than "whatever happened to arrive in time",
+  and it costs nothing: every send went out when its sender entered the fence,
+  so the wait is one hop overlapping the rollup. It cannot deadlock, because
+  sending never waits on receiving.
+
+- **A daemon's own blob is not handed back to PMIx.** The local server already
+  holds its own clients' remote-scope data — it is what it gave us — so
+  returning it would be a redundant store of the single largest piece.
+
+The release still arrives, and is still what retires the tracker and completes
+the local clients; it simply carries nothing, and `fence_release()` answers
+from the ring instead. Everything else — the signature, the generation, the
+recovery epoch and restart, the timeout, the abort path — is the rollup's,
+unchanged.
+
+**Scope-local data never entered this picture at all.** A `PMIx_Put` at
+`PMIX_LOCAL` scope is stored in the client peer's own GDS and is *not* fetched
+by `pmix_server_collect_data()`, which asks only for `PMIX_REMOTE` — so it has
+never been circulated by any of these movements, and local peers read it
+through the ordinary server GET path. `PMIX_GLOBAL` lands in both stores and
+is circulated. Worth knowing when reasoning about what a fence is actually
+carrying.
+
+**What is not built.** Sharing further than one hop each way — neighbors plus
+one level up and down the tree, say — is the obvious next dial, and the
+movement is shaped so that widening it is a change to `nbr_ring()` and the
+convergence test and nothing else. Do not widen it speculatively: the point of
+the ring is that it is the *cheapest* thing that covers the neighbor-exchange
+pattern real applications use, and every extra hop is bytes moved on a guess.
 
 **A fence has no originator, and that changes everything about agreement.**
 A broadcast's movement is decided by one daemon and obeyed by the rest. Every

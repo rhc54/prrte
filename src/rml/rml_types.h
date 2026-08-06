@@ -151,6 +151,10 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * and the rollup receiver rejects anything that is not in one of its
  * subtrees. */
 #define PRTE_RML_TAG_FENCE_EXCHANGE    34
+/* A fence's lateral neighbor share.  Separate from both of the above for the
+ * same reason the exchange is: it arrives from a ring neighbor rather than a
+ * routing-tree child, and it is a single blob rather than an exchange step. */
+#define PRTE_RML_TAG_FENCE_NEIGHBOR    35
 
 /* debugger release */
 #define PRTE_RML_TAG_DEBUGGER_RELEASE 37

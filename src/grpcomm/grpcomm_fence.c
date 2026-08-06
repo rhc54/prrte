@@ -120,9 +120,13 @@ typedef struct {
      * child subtrees, the exchange counts blocks - they are not the same
      * question, so it is asked through here */
     bool (*converged)(prte_grpcomm_fence_t *coll);
-    /* absorb this daemon's own contribution, and set whatever the movement
-     * needs in motion */
-    int (*contribute)(prte_grpcomm_fence_t *coll, pmix_data_buffer_t *payload);
+    /* absorb an arriving contribution, and set whatever the movement needs in
+     * motion. `own` says whether these are our own clients' bytes or an
+     * aggregate arriving from a child subtree: the rollup treats the two
+     * alike, but a movement that has to put *our* data somewhere else - onto
+     * a lateral link - has to be able to tell them apart. */
+    int (*contribute)(prte_grpcomm_fence_t *coll, pmix_data_buffer_t *payload,
+                      bool own);
     void (*answer)(prte_grpcomm_fence_t *coll); /* the tracker has converged */
 } fence_movement_t;
 
@@ -144,14 +148,43 @@ typedef struct fence_exchange_t {
     bool started;                /* our own block is in and the exchange is live */
 } fence_exchange_t;
 
+/* neighbor_share's per-tracker state.
+ *
+ * The ring is coll->dmns in ascending rank order - the same participant list
+ * every daemon derives from the signature - so, as with the exchange, there is
+ * no ring to carry on the wire. Our neighbors are simply the entries either
+ * side of our own position, wrapping.
+ *
+ * Blobs are kept keyed by the daemon that sent them rather than counted,
+ * because the sender cannot always be classified when it arrives: a neighbor
+ * can reach us before we know the job the signature names, and an unresolved
+ * tracker has no dmns to look ourselves up in. Keying also makes a replay
+ * after a fault idempotent - a second copy from the same daemon overwrites
+ * rather than satisfying a count twice. */
+typedef struct fence_neighbors_t {
+    pmix_rank_t left;            /* PMIX_RANK_INVALID when we have none */
+    pmix_rank_t right;
+    bool computed;               /* left/right derived from coll->dmns yet? */
+    bool participant;            /* are we in coll->dmns at all */
+    bool have_mine;              /* our own clients' contribution is in hand */
+    bool sent;                   /* ...and we owe our neighbors nothing */
+    pmix_byte_object_t mine;     /* kept so a replay can re-send it */
+    pmix_rank_t *from;           /* [nblobs] who gave us each blob */
+    pmix_byte_object_t *blobs;   /* [nblobs] */
+    size_t nblobs;
+} fence_neighbors_t;
+
 static bool tree_gather_converged(prte_grpcomm_fence_t *coll);
 static int  tree_gather_contribute(prte_grpcomm_fence_t *coll,
-                                   pmix_data_buffer_t *payload);
+                                   pmix_data_buffer_t *payload, bool own);
 static void tree_gather_answer(prte_grpcomm_fence_t *coll);
 static bool rd_allgather_converged(prte_grpcomm_fence_t *coll);
 static int  rd_allgather_contribute(prte_grpcomm_fence_t *coll,
-                                    pmix_data_buffer_t *payload);
+                                    pmix_data_buffer_t *payload, bool own);
 static void rd_allgather_answer(prte_grpcomm_fence_t *coll);
+static bool neighbor_converged(prte_grpcomm_fence_t *coll);
+static int  neighbor_contribute(prte_grpcomm_fence_t *coll,
+                                pmix_data_buffer_t *payload, bool own);
 
 static const fence_movement_t fence_movements[] = {
     { .id = PRTE_GRPCOMM_FENCE_TREE_GATHER,
@@ -164,6 +197,14 @@ static const fence_movement_t fence_movements[] = {
       .converged = rd_allgather_converged,
       .contribute = rd_allgather_contribute,
       .answer = rd_allgather_answer },
+    /* The ring share answers exactly as the rollup does - an empty aggregate
+     * up the tree, an empty release back down - because under this movement
+     * the tree carries participation and nothing else. */
+    { .id = PRTE_GRPCOMM_FENCE_NEIGHBOR,
+      .name = "neighbor_share",
+      .converged = neighbor_converged,
+      .contribute = neighbor_contribute,
+      .answer = tree_gather_answer },
 };
 
 static const fence_movement_t* fence_movement_by_id(uint32_t id)
@@ -1150,7 +1191,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         PMIX_INFO_FREE(info, ninfo);
         return;
     }
-    rc = mv->contribute(coll, buffer);
+    rc = mv->contribute(coll, buffer, (0 > slot));
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_INFO_FREE(info, ninfo);
@@ -1232,9 +1273,10 @@ static bool tree_gather_converged(prte_grpcomm_fence_t *coll)
 /* The rollup's bucket is an append: order is whatever the merges happened to
  * reach us in, which is why the result is not reproducible across daemons. */
 static int tree_gather_contribute(prte_grpcomm_fence_t *coll,
-                                  pmix_data_buffer_t *payload)
+                                  pmix_data_buffer_t *payload, bool own)
 {
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(own);
 
     if (NULL == payload) {
         return PRTE_SUCCESS;
@@ -1630,11 +1672,12 @@ static bool rd_allgather_converged(prte_grpcomm_fence_t *coll)
 
 /* Our own contribution: stand the exchange up, keep our block, and start. */
 static int rd_allgather_contribute(prte_grpcomm_fence_t *coll,
-                                   pmix_data_buffer_t *payload)
+                                   pmix_data_buffer_t *payload, bool own)
 {
     pmix_byte_object_t bo = PMIX_BYTE_OBJECT_STATIC_INIT;
     pmix_data_buffer_t rest;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(own);
 
     if (NULL == coll->xch) {
         rc = xch_attach(coll);
@@ -1846,6 +1889,474 @@ void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
     check_complete(coll);
 }
 
+/* ---------------------------------------------------------------------- */
+/* MOVEMENT: share our contribution sideways with our two ring neighbors, and
+ * roll up nothing but the fact that we took part.
+ *
+ * Both of the other movements try to put the *whole* modex in front of every
+ * daemon - the rollup by broadcasting it, the exchange by trading for it - and
+ * both therefore move O(N) bytes onto every node whether or not anybody there
+ * will read them. That is the cost that dominates a modex, and at scale most
+ * of what it buys is never touched: a rank talks to a handful of peers, not to
+ * all of them.
+ *
+ * So this movement stops trying. Each daemon hands its own contribution
+ * straight to the two daemons either side of it in the participant ring and
+ * tells the controller, through the tree, only that it has taken part; the
+ * controller broadcasts an equally empty release once everybody has. The tree
+ * still carries the *synchronization*, which is what a fence is actually for,
+ * and carries none of the data. Anything a process then asks for that its own
+ * daemon does not hold is fetched on demand by direct modex - which returns
+ * that proc's entire published set in one round trip, so the second key from
+ * the same peer is free.
+ *
+ * What each node ends up holding for free is its own procs' data plus its two
+ * neighbors', which is exactly the neighbor-exchange pattern that dominates
+ * real applications. Everything else is paid for only if it is used.
+ *
+ * Three things are worth being precise about:
+ *
+ * - **The ring is the participant list, not the routing tree.** coll->dmns in
+ *   ascending rank order, which every daemon derives from the same signature
+ *   through the same create_dmns(). So there is no ring to carry on the wire,
+ *   and - as with the exchange - no daemon whose opinion is authoritative,
+ *   which is why the movement id travels and a disagreement is reported.
+ *
+ * - **Holding our neighbors' blobs is part of converging, not part of the
+ *   release.** A daemon does not report participation upward until it has
+ *   both, so by the time the release can be issued every daemon already holds
+ *   what it is owed. That makes the guarantee deterministic - after this fence
+ *   you *have* your neighbors' data - rather than "whatever happened to
+ *   arrive", and it costs nothing: the sends all went out when their senders
+ *   entered the fence, so the wait is one hop that overlaps the rollup. It
+ *   cannot deadlock, because sending never waits on receiving.
+ *
+ * - **Our own blob is not handed back to PMIx.** The local server already
+ *   holds its own clients' remote-scope data - it is what it gave us - so
+ *   returning it would be a redundant store of the largest single piece. */
+
+static fence_neighbors_t* nbr_state(prte_grpcomm_fence_t *coll)
+{
+    if (NULL == coll->nbrs) {
+        coll->nbrs = (fence_neighbors_t *) calloc(1, sizeof(fence_neighbors_t));
+        if (NULL == coll->nbrs) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return NULL;
+        }
+        coll->nbrs->left = PMIX_RANK_INVALID;
+        coll->nbrs->right = PMIX_RANK_INVALID;
+    }
+    return coll->nbrs;
+}
+
+void prte_grpcomm_fence_nbr_free(prte_grpcomm_fence_t *coll)
+{
+    fence_neighbors_t *x = coll->nbrs;
+
+    if (NULL == x) {
+        return;
+    }
+    for (size_t i = 0; i < x->nblobs; i++) {
+        PMIX_BYTE_OBJECT_DESTRUCT(&x->blobs[i]);
+    }
+    if (NULL != x->blobs) {
+        free(x->blobs);
+    }
+    if (NULL != x->from) {
+        free(x->from);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&x->mine);
+    free(x);
+    coll->nbrs = NULL;
+}
+
+/* Work out who is either side of us in the participant ring.  Answers once
+ * and latches, because the participant list does not move under us: a fault
+ * leaves coll->dmns as the full pre-fault set (see the restart). */
+static void nbr_ring(prte_grpcomm_fence_t *coll)
+{
+    fence_neighbors_t *x = coll->nbrs;
+    int rc;
+
+    if (NULL == x || x->computed) {
+        return;
+    }
+    if (coll->unresolved) {
+        /* we do not know the job the signature names, so there is no
+         * participant list to find ourselves in yet */
+        return;
+    }
+    if (NULL == coll->dmns) {
+        /* create_dmns() reports "every daemon in the DVM" as a count with no
+         * array. There is nothing to index, so there is no ring - which is
+         * the right answer anyway: a fence over the daemon job carries no
+         * modex, and this degenerates to the plain rollup barrier it is. A
+         * zero count is the opposite statement, "no daemons at all". */
+        x->computed = true;
+        x->participant = (0 < coll->ndmns);
+        return;
+    }
+    rc = prte_grpcomm_ring_neighbors(coll->dmns, coll->ndmns,
+                                     PRTE_PROC_MY_NAME->rank,
+                                     &x->left, &x->right);
+    x->computed = true;
+    /* PRTE_ERR_NOT_FOUND means we are relaying for a fence we are not in - an
+     * ordinary role under the rollup, and nothing lateral for us to do. */
+    x->participant = (PRTE_SUCCESS == rc);
+}
+
+static bool nbr_held(fence_neighbors_t *x, pmix_rank_t from)
+{
+    for (size_t i = 0; i < x->nblobs; i++) {
+        if (x->from[i] == from) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Keep a neighbor's blob, keyed by who sent it.  Keyed rather than counted
+ * because a replay after a fault must overwrite rather than satisfy a count
+ * twice, and because a blob can arrive before we know enough to say which
+ * side of us its sender is on. */
+static int nbr_store(fence_neighbors_t *x, pmix_rank_t from,
+                     const pmix_byte_object_t *src)
+{
+    pmix_byte_object_t *nblobs;
+    pmix_rank_t *nfrom;
+    size_t at = SIZE_MAX;
+
+    for (size_t i = 0; i < x->nblobs; i++) {
+        if (x->from[i] == from) {
+            at = i;
+            break;
+        }
+    }
+    if (SIZE_MAX == at) {
+        nfrom = (pmix_rank_t *) realloc(x->from, (x->nblobs + 1) * sizeof(pmix_rank_t));
+        if (NULL == nfrom) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        x->from = nfrom;
+        nblobs = (pmix_byte_object_t *) realloc(x->blobs,
+                                                (x->nblobs + 1) * sizeof(pmix_byte_object_t));
+        if (NULL == nblobs) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        x->blobs = nblobs;
+        at = x->nblobs++;
+        x->from[at] = from;
+        PMIX_BYTE_OBJECT_CONSTRUCT(&x->blobs[at]);
+    } else {
+        PMIX_BYTE_OBJECT_DESTRUCT(&x->blobs[at]);
+        PMIX_BYTE_OBJECT_CONSTRUCT(&x->blobs[at]);
+    }
+    if (NULL == src || 0 == src->size) {
+        return PRTE_SUCCESS;
+    }
+    x->blobs[at].bytes = (char *) malloc(src->size);
+    if (NULL == x->blobs[at].bytes) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    memcpy(x->blobs[at].bytes, src->bytes, src->size);
+    x->blobs[at].size = src->size;
+    return PRTE_SUCCESS;
+}
+
+static int nbr_send_one(prte_grpcomm_fence_t *coll, pmix_rank_t dest,
+                        pmix_byte_object_t *bo)
+{
+    pmix_data_buffer_t *buf, *framed;
+    int rc;
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = fence_sig_pack(buf, coll->sig);
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, &coll->movement, 1, PMIX_UINT32);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buf, bo, 1, PMIX_BYTE_OBJECT);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_status(rc);
+    }
+
+    PMIX_DATA_BUFFER_CREATE(framed);
+    rc = pack_epoch_frame(framed, buf);
+    PMIX_DATA_BUFFER_RELEASE(buf);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        return rc;
+    }
+
+    /* the neighbor is chosen by its position in the ring, not by where it
+     * sits in the routing tree, so tell the RML this link is not a lifeline
+     * before the send opens it */
+    prte_rml_lateral_register(dest);
+
+    PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_globals.output,
+                         "%s grpcomm:fence:neighbor sending %d bytes to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) bo->size,
+                         PRTE_VPID_PRINT(dest)));
+
+    PRTE_RML_SEND_DIRECT(rc, dest, framed, PRTE_RML_TAG_FENCE_NEIGHBOR);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        return rc;
+    }
+    return PRTE_SUCCESS;
+}
+
+/* Send our blob to both neighbors, as soon as we have it *and* know who they
+ * are.  Those two facts can arrive in either order - an unresolved tracker
+ * gets its participant list only when the job is built - so this is a
+ * progress function called from both. */
+static void nbr_progress(prte_grpcomm_fence_t *coll)
+{
+    fence_neighbors_t *x = coll->nbrs;
+    int rc;
+
+    if (NULL == x || !x->have_mine || x->sent) {
+        return;
+    }
+    nbr_ring(coll);
+    if (!x->computed) {
+        return;
+    }
+    /* Marked sent even when there is nobody to send to: "sent" is the
+     * statement that we owe our neighbors nothing, and a ring of one owes
+     * nothing to begin with. */
+    x->sent = true;
+    if (PMIX_RANK_INVALID != x->left) {
+        rc = nbr_send_one(coll, x->left, &x->mine);
+        if (PRTE_SUCCESS != rc) {
+            abort_fence_op(coll, prte_pmix_convert_rc(rc));
+            return;
+        }
+    }
+    /* in a ring of two both neighbors are the same daemon - send once */
+    if (PMIX_RANK_INVALID != x->right && x->right != x->left) {
+        rc = nbr_send_one(coll, x->right, &x->mine);
+        if (PRTE_SUCCESS != rc) {
+            abort_fence_op(coll, prte_pmix_convert_rc(rc));
+        }
+    }
+}
+
+static bool neighbor_converged(prte_grpcomm_fence_t *coll)
+{
+    fence_neighbors_t *x = coll->nbrs;
+
+    if (coll->nreported < coll->nexpected) {
+        return false;
+    }
+    if (NULL == x) {
+        /* nothing of ours went into this fence: we hold a tracker only
+         * because we relay for our subtree, and a relay has no ring */
+        return true;
+    }
+    nbr_ring(coll);
+    if (!x->computed || !x->participant) {
+        return x->computed;
+    }
+    if (!x->sent) {
+        return false;
+    }
+    if (PMIX_RANK_INVALID != x->left && !nbr_held(x, x->left)) {
+        return false;
+    }
+    if (PMIX_RANK_INVALID != x->right && !nbr_held(x, x->right)) {
+        return false;
+    }
+    return true;
+}
+
+static int neighbor_contribute(prte_grpcomm_fence_t *coll,
+                               pmix_data_buffer_t *payload, bool own)
+{
+    fence_neighbors_t *x;
+    pmix_data_buffer_t rest;
+    int rc;
+
+    if (!own) {
+        /* A child's rollup under this movement carries no data - only the
+         * statement that its subtree took part - so there is nothing to
+         * absorb. This is also what makes the release empty: coll->bucket is
+         * never written, and the answer is the rollup's unchanged. */
+        return PRTE_SUCCESS;
+    }
+    x = nbr_state(coll);
+    if (NULL == x) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (x->have_mine) {
+        /* a replay after a fault - our neighbors already hold this */
+        nbr_progress(coll);
+        return PRTE_SUCCESS;
+    }
+
+    /* Our blob is whatever is left after the info structs. It has to be taken
+     * with PMIx_Data_copy_payload rather than read off base_ptr/bytes_used,
+     * for the reason spelled out in rd_allgather_contribute(). */
+    PMIX_DATA_BUFFER_CONSTRUCT(&rest);
+    if (NULL != payload) {
+        rc = PMIx_Data_copy_payload(&rest, payload);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&rest);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+    if (0 < rest.bytes_used) {
+        x->mine.bytes = (char *) malloc(rest.bytes_used);
+        if (NULL == x->mine.bytes) {
+            PMIX_DATA_BUFFER_DESTRUCT(&rest);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        memcpy(x->mine.bytes, rest.base_ptr, rest.bytes_used);
+        x->mine.size = rest.bytes_used;
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&rest);
+    x->have_mine = true;
+
+    nbr_progress(coll);
+    return PRTE_SUCCESS;
+}
+
+/* What this daemon hands its clients when the release lands: everything its
+ * ring neighbors sent it, concatenated.  Not its own blob - see the note at
+ * the head of this movement. */
+static void nbr_assemble(prte_grpcomm_fence_t *coll, pmix_byte_object_t *out)
+{
+    fence_neighbors_t *x = coll->nbrs;
+    size_t total = 0, at = 0;
+
+    PMIX_BYTE_OBJECT_CONSTRUCT(out);
+    if (NULL == x) {
+        return;
+    }
+    for (size_t i = 0; i < x->nblobs; i++) {
+        total += x->blobs[i].size;
+    }
+    if (0 == total) {
+        return;
+    }
+    out->bytes = (char *) malloc(total);
+    if (NULL == out->bytes) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return;
+    }
+    for (size_t i = 0; i < x->nblobs; i++) {
+        if (0 < x->blobs[i].size) {
+            memcpy(out->bytes + at, x->blobs[i].bytes, x->blobs[i].size);
+            at += x->blobs[i].size;
+        }
+    }
+    out->size = total;
+}
+
+/* A neighbor's whole contribution, arriving over a lateral link. */
+void prte_grpcomm_fence_neighbor_recv(int status, pmix_proc_t *sender,
+                                      pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tag, void *cbdata)
+{
+    int32_t cnt;
+    int rc;
+    uint32_t stamp, movement;
+    pmix_byte_object_t blob = PMIX_BYTE_OBJECT_STATIC_INIT;
+    prte_grpcomm_fence_signature_t *sig = NULL;
+    prte_grpcomm_fence_t *coll;
+    fence_neighbors_t *x;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &stamp, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (stamp < prte_grpcomm_globals.recovery_epoch) {
+        return;
+    }
+    if (stamp > prte_grpcomm_globals.recovery_epoch) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_ORDER_MSG);
+        prte_grpcomm_advance_epoch(stamp);
+    }
+
+    rc = fence_sig_unpack(buffer, &sig);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        return;
+    }
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &movement, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    /* Create the tracker if it is not there yet: a neighbor sends the moment
+     * its own clients fence, which can be well before ours do, and its blob
+     * is exactly what we would otherwise have to fetch key by key. */
+    if (fence_generation_is_stale(sig, sender)) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+    coll = get_tracker(sig, true);
+    PMIX_RELEASE(sig);
+    if (NULL == coll) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    if (coll->converged || coll->aborting) {
+        /* We only converge under this movement once we hold both neighbors'
+         * blobs, so this can only be a replay of one we already have. A blob
+         * belonging to the *next* fence over these participants carries a
+         * later generation and got its own tracker above. */
+        return;
+    }
+    if (PRTE_GRPCOMM_FENCE_NEIGHBOR != movement) {
+        const fence_movement_t *theirs = fence_movement_by_id(movement);
+        prte_show_help("help-prte-grpcomm.txt", "fence-movement-mismatch", true,
+                       prte_process_info.nodename, "neighbor_share",
+                       PRTE_NAME_PRINT(sender),
+                       (NULL == theirs) ? "unknown" : theirs->name);
+        abort_fence_op(coll, PMIX_ERR_NOT_SUPPORTED);
+        return;
+    }
+    coll->movement = movement;
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &blob, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    x = nbr_state(coll);
+    if (NULL == x) {
+        PMIX_BYTE_OBJECT_DESTRUCT(&blob);
+        abort_fence_op(coll, PMIX_ERR_NOMEM);
+        return;
+    }
+    rc = nbr_store(x, sender->rank, &blob);
+    PMIX_BYTE_OBJECT_DESTRUCT(&blob);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        abort_fence_op(coll, prte_pmix_convert_rc(rc));
+        return;
+    }
+
+    PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_globals.output,
+                         "%s grpcomm:fence:neighbor holding %d blobs from ring",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) x->nblobs));
+
+    check_complete(coll);
+}
+
 static void relcb(void *cbdata)
 {
     uint8_t *data = (uint8_t *) cbdata;
@@ -1923,6 +2434,17 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unload(buffer, &bo);
     if (PMIX_SUCCESS != rc && PMIX_SUCCESS == ret) {
         ret = rc;
+    }
+
+    /* Under the ring share the release is empty by design: the tree carried
+     * participation, and the data came in sideways. So throw away what the
+     * broadcast brought and answer from what our neighbors gave us. An
+     * aborted fence answers with nothing, as it does under any movement. */
+    if (PRTE_GRPCOMM_FENCE_NEIGHBOR == coll->movement) {
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        if (PMIX_SUCCESS == ret) {
+            nbr_assemble(coll, &bo);
+        }
     }
 
     /* execute the callback */
@@ -2054,6 +2576,10 @@ void prte_grpcomm_fence_resolve_pending(void)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              (int) coll->nexpected, (int) coll->nreported));
 
+        /* The ring share could not work out who our neighbors were while the
+         * participant list was unknown, so anything it was holding back goes
+         * out now. */
+        nbr_progress(coll);
         check_complete(coll);
     }
 }

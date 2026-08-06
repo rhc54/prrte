@@ -166,7 +166,10 @@ void prte_grpcomm_register(void)
                                "(roll up to the controller, which broadcasts "
                                "the result back), \"allgather\" (a lateral "
                                "exchange leaving every daemon holding the "
-                               "result, with no release), or \"auto\" (the "
+                               "result, with no release), \"neighbor\" (share "
+                               "sideways with the two ring neighbors and roll "
+                               "up participation only, leaving everything else "
+                               "to direct modex), or \"auto\" (the "
                                "allgather for a fence carrying "
                                "PMIX_COLLECT_DATA, the rollup for a barrier). "
                                "Unlike the broadcast this is NOT a per-daemon "
@@ -202,11 +205,14 @@ void prte_grpcomm_register(void)
             prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
         } else if (0 == strcasecmp(fence_movement, "allgather")) {
             prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_RD_ALLGATHER;
+        } else if (0 == strcasecmp(fence_movement, "neighbor")) {
+            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_NEIGHBOR;
         } else if (0 == strcasecmp(fence_movement, "auto")) {
             prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_SELECT_AUTO;
         } else {
             pmix_output(0, "PRRTE: grpcomm_fence_movement \"%s\" is not one of "
-                           "tree/allgather/auto - using tree", fence_movement);
+                           "tree/allgather/neighbor/auto - using tree",
+                        fence_movement);
             prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
         }
     }
@@ -247,6 +253,9 @@ int prte_grpcomm_init(void)
      * partners rather than from a routing-tree child */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_fence_exchange_recv, NULL);
+    /* ...and for a fence's ring share, which likewise arrives sideways */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_NEIGHBOR,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_neighbor_recv, NULL);
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
@@ -276,6 +285,7 @@ void prte_grpcomm_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_NEIGHBOR);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
     return;

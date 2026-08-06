@@ -240,6 +240,108 @@ static int test_exchange_schedule(void)
  * this guards is computing (total/nparts) per chunk, which silently loses up
  * to nparts-1 bytes off the end of every payload that does not divide evenly.
  */
+/* The ring the neighbor_share fence movement shares over.
+ *
+ * Every participant derives this independently from the same participant
+ * list, and the one property that matters is *reciprocity*: if A says B is on
+ * its right, B must say A is on its left. Break that and A waits forever for
+ * a blob nobody was ever going to send it - a DVM-wide hang with nothing in
+ * the logs, which is precisely why this is pinned exhaustively rather than
+ * spot-checked.
+ *
+ * The participant ranks are deliberately sparse in the sweep below: a fence
+ * over a subset of the DVM gets a subset of daemon vpids, so an implementation
+ * that quietly assumed dmns[i] == i would pass a dense test and hang on a real
+ * subset fence. */
+static int test_ring_neighbors(void)
+{
+    int failures = 0;
+    pmix_rank_t left = 0, right = 0;
+    pmix_rank_t parts[64];
+    size_t n;
+
+    /* nonsense is refused, and refusal still answers */
+    left = right = 12345;
+    CHECK("empty participant list is refused",
+          PRTE_SUCCESS != prte_grpcomm_ring_neighbors(NULL, 0, 0, &left, &right));
+    CHECK("a refused ring still reports no neighbors",
+          PMIX_RANK_INVALID == left && PMIX_RANK_INVALID == right);
+    parts[0] = 7;
+    CHECK("NULL out-parameter is refused",
+          PRTE_SUCCESS != prte_grpcomm_ring_neighbors(parts, 1, 7, NULL, &right));
+
+    /* a ring of one: a participant, but with nobody to share with */
+    left = right = 12345;
+    CHECK("a lone participant is in the ring",
+          PRTE_SUCCESS == prte_grpcomm_ring_neighbors(parts, 1, 7, &left, &right));
+    CHECK("a lone participant has no neighbors",
+          PMIX_RANK_INVALID == left && PMIX_RANK_INVALID == right);
+
+    /* a non-participant is NOT_FOUND, which is an ordinary state (a daemon
+     * relaying a fence it is not in) rather than an error */
+    left = right = 12345;
+    CHECK("a non-participant is reported as not found",
+          PRTE_ERR_NOT_FOUND == prte_grpcomm_ring_neighbors(parts, 1, 9, &left, &right));
+    CHECK("a non-participant has no neighbors",
+          PMIX_RANK_INVALID == left && PMIX_RANK_INVALID == right);
+
+    /* a ring of two: both sides are the same daemon, deliberately - the
+     * sender's send-once test keys on that, and reporting one side as
+     * INVALID would make "who do I owe" and "who do I expect" disagree */
+    parts[0] = 3;
+    parts[1] = 11;
+    CHECK("a ring of two resolves",
+          PRTE_SUCCESS == prte_grpcomm_ring_neighbors(parts, 2, 3, &left, &right));
+    CHECK("a ring of two has one neighbor named twice",
+          11 == left && 11 == right);
+
+    /* the real property, over every ring size up to 64, with sparse ranks */
+    for (n = 3; n <= 64; n++) {
+        bool ok = true;
+
+        for (size_t i = 0; i < n; i++) {
+            /* strided and offset, so a dense-index assumption cannot pass */
+            parts[i] = (pmix_rank_t) (5 + 3 * i);
+        }
+        for (size_t i = 0; i < n && ok; i++) {
+            pmix_rank_t l = 0, r = 0, rl = 0, rr = 0;
+
+            if (PRTE_SUCCESS != prte_grpcomm_ring_neighbors(parts, n, parts[i], &l, &r)) {
+                ok = false;
+                break;
+            }
+            /* my right neighbour must call me its left, and vice versa */
+            if (PRTE_SUCCESS != prte_grpcomm_ring_neighbors(parts, n, r, &rl, &rr)) {
+                ok = false;
+                break;
+            }
+            if (rl != parts[i]) {
+                ok = false;
+                break;
+            }
+            if (PRTE_SUCCESS != prte_grpcomm_ring_neighbors(parts, n, l, &rl, &rr)) {
+                ok = false;
+                break;
+            }
+            if (rr != parts[i]) {
+                ok = false;
+                break;
+            }
+            /* and above two participants the two sides are distinct, so
+             * nobody sends the same blob to the same daemon twice */
+            if (l == r) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            fprintf(stderr, "  ring of %lu is not reciprocal\n", (unsigned long) n);
+        }
+        CHECK("every ring is reciprocal", ok);
+    }
+    return failures;
+}
+
 static int test_chunk_partition(void)
 {
     int failures = 0;
@@ -1321,6 +1423,7 @@ int main(void)
 
     failures += test_release_bcast_default();
     failures += test_exchange_schedule();
+    failures += test_ring_neighbors();
     failures += test_chunk_partition();
     failures += test_bcast_movement_contract();
     failures += test_scatter_partition();
