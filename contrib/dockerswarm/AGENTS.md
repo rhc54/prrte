@@ -1506,6 +1506,22 @@ you plot. The median is used rather than the mean because a single
 scheduling hiccup on an oversubscribed host skews a mean badly and the run
 count is small.
 
+**The memory guard stops an OOM, not a distorted measurement.** `--max-bytes`
+and `--max-total-bytes` exist so a configuration that cannot fit is skipped
+rather than swapped to death, but a run comfortably *under* them can still be
+memory-bound, and it does not announce itself - it just reports a larger
+number. Measured: at 16 nodes with 512 KB a rank, five iterations accumulate
+50 MB per daemon and 805 MB across the host (well under the 2 GB default), and
+the payload cost came out at 491 us/KB, growing *faster* than the payload. The
+same fence at one iteration - identical bytes moved per collective, 17 MB per
+daemon - cost 128 us/KB and grew *slower* than the payload. Nothing about the
+collective changed; only what the host was holding.
+
+So when sweeping payload, hold `collected_bytes` roughly constant by moving
+`--iters` the opposite way, and treat a cost-per-byte that *rises* with payload
+as a memory result until proven otherwise. The raw CSV carries
+`collected_bytes` for exactly this check.
+
 **Interpreting numbers from a laptop.** These containers share one host
 kernel and a handful of cores. Once `nodes × ppn` passes the core count,
 every daemon and every rank is time-slicing, and the absolute microseconds
