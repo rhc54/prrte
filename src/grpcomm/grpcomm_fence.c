@@ -54,6 +54,8 @@ static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st);
 static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body);
 static uint32_t fence_generation(pmix_proc_t *procs, size_t sz);
 static uint32_t fence_generation_for_new_fence(prte_grpcomm_fence_signature_t *sig);
+static bool fence_generation_is_stale(prte_grpcomm_fence_signature_t *sig,
+                                      pmix_proc_t *sender);
 
 /* A namespace whose procs arrived here by restart.
  *
@@ -480,6 +482,40 @@ static uint32_t fence_generation_for_new_fence(prte_grpcomm_fence_signature_t *s
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     }
     return fence_generation(sig->signature, sig->sz);
+}
+
+/* Does this contribution belong to a fence we have already finished?
+ *
+ * The generation is part of the tracker key, so a stale one matches nothing -
+ * and get_tracker() would then happily build a tracker for a fence that is
+ * over, which nothing will ever complete or delete.  Catch it here instead.
+ * A generation *ahead* of ours is not stale: that is the early-arrival case,
+ * and building its tracker is exactly the right answer.
+ *
+ * Slurm's PMI2 fence does the same thing with its kvs_seq and treats the
+ * mismatch as fatal, which it can afford because its rollup has no lateral
+ * traffic to arrive out of turn.  Ours is a drop rather than an error for
+ * that reason - see the exchange notes in AGENTS.md. */
+static bool fence_generation_is_stale(prte_grpcomm_fence_signature_t *sig,
+                                      pmix_proc_t *sender)
+{
+    uint32_t current;
+
+    if (NULL == sig->signature || 0 == sig->sz) {
+        return false;
+    }
+    current = fence_generation(sig->signature, sig->sz);
+    if (sig->generation >= current) {
+        return false;
+    }
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm fence: contribution from %s is for generation "
+                         "%u, which we retired - we are on %u. Dropping it rather "
+                         "than building a tracker nothing can complete",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (NULL == sender) ? "unknown" : PRTE_NAME_PRINT(sender),
+                         (unsigned) sig->generation, (unsigned) current));
+    return true;
 }
 
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
@@ -960,6 +996,11 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &movement, &cnt, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
+    if (fence_generation_is_stale(sig, sender)) {
         PMIX_RELEASE(sig);
         return;
     }
@@ -1740,6 +1781,11 @@ void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
      * and its blocks are exactly what we would otherwise have to ask for
      * again. The tracker is what holds them until our own contribution
      * arrives and starts our half of the exchange. */
+    if (fence_generation_is_stale(sig, sender)) {
+        PMIX_RELEASE(sig);
+        return;
+    }
+
     coll = get_tracker(sig, true);
     if (NULL == coll) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -2010,6 +2056,14 @@ void prte_grpcomm_fence_resolve_pending(void)
 
         check_complete(coll);
     }
+}
+
+/* Retire a generation without running a fence. Exported only so the unit test
+ * can put a signature into the state a completed fence leaves it in, which is
+ * what makes the generation before it stale. */
+void prte_grpcomm_fence_note_retired(prte_grpcomm_fence_signature_t *sig)
+{
+    fence_generation_advance(sig);
 }
 
 /* Same, for a caller outside this file. Exported only so the unit test can

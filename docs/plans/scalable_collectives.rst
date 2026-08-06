@@ -687,6 +687,102 @@ that it has become reachable. A DVM-wide generational counter is the wrong
 answer: agreeing one costs a collective of its own, which is precisely what
 deriving it locally avoids.
 
+What Slurm's PMI2 does, and what it tells us
+--------------------------------------------
+
+Slurm's ``src/plugins/mpi/pmi2`` is an independent implementation of the same
+problem that runs at production scale, so it is worth being precise about what
+it does differently.
+
+**Its KVS fence is our tree fence, with the same asymptotics.** ``kvs.c`` merges
+up the stepd tree and the root then does one
+``slurm_forward_data(step_nodelist, ...)`` of the whole merged KVS to every
+node - O(N·b) delivered per node, which is ``tree_gather_release``. Slurm did
+not make the allgather scale.
+
+**What scales is that MPI stops asking for one.** ``ring.c`` implements
+``PMIX_Ring``, which hands each process only its left and right neighbour
+values: O(1) per process at any N. It is an up-sweep/down-sweep scan - RING_IN
+carries (count, left, right) up, and the root sends each child a *different*
+RING_OUT giving that subtree's starting rank and its own neighbours. The
+argument for it is
+"PMI Extensions for Scalable MPI Startup" (Chakraborty et al., EuroMPI/ASIA
+2014): with a ring plus on-demand connection establishment, the business-card
+allgather is not needed at startup at all. PRRTE's equivalent lever is the
+direct modex, not a faster ``rd_allgather``.
+
+Three things transfer.
+
+**A fence sequence number, which they also derive locally.** ``kvs_seq`` starts
+at 1, is incremented in ``temp_kvs_send()`` ("expecting new kvs after now"),
+travels on the wire in both directions, and is checked on arrival - which is
+exactly the ``generation`` on our fence signature, arrived at independently.
+Two details differ. They keep the last sequence seen *per child*
+(``tree_info.children_kvs_seq[from_nodeid]``) where we keep a bool per subtree
+in ``reported_slots``; theirs distinguishes a duplicate of the current round
+from a straggler of an older one. And they treat any mismatch as fatal, which
+they can afford because their rollup has no lateral traffic that can arrive out
+of turn - ours has to hold an early arrival instead. The gap their check
+exposed in ours was on the *stale* side: a contribution for a generation we had
+already retired matched no tracker, so ``get_tracker()`` built one that nothing
+would ever complete or delete. That is now refused on the way in.
+
+**A scan is a shape we do not have.** Every message in ``ring.c`` is O(1) no
+matter how large the job, because each child is sent only what its own subtree
+needs. Our release broadcasts the whole result to everyone. For any operation
+where a participant needs a slice rather than the aggregate - rank assignment,
+neighbour exchange - that is the difference between O(1) and O(N) per daemon.
+
+**Their state reset is synchronous with the send.** ``pmix_ring_out()`` sends
+to its children and then clears the per-child slots and the count inside the
+same handler, so no next-round message can attach to the previous round's
+state. That is the same rule as retiring a tracker before delivering its
+release, reached from the other direction.
+
+Two things not to copy: every error path calls ``slurm_kill_job_step(SIGKILL)``
+- there is no fault tolerance in the collective at all, which is most of why
+their code is smaller than ours - and only one ring may be in flight, with
+state in a fixed per-child array indexed arithmetically, because they have no
+notion of a collective over a subset. Our tracker identity machinery is the
+price of semantics they do not offer, not accidental complexity.
+
+Scattering the fence release: measured, and not worth it as a tag
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ring.c``'s per-child down messages prompt an obvious question: the release
+broadcast is the one routinely large message the fence sends, and
+``bulk_tag_prefers_bulk()`` names only ``PRTE_RML_TAG_DAEMON_LAUNCH``, so the
+release goes out whole to every child at every level. Adding
+``PRTE_RML_TAG_FENCE_RELEASE`` to that table was tried, at 8 and 16 daemons
+with ``grpcomm_fence_movement tree`` so the release actually carries the modex:
+
+===================  ==================  ==================
+payload              collect (modex)     barrier
+===================  ==================  ==================
+8 KB/rank, N=8       0.93x               1.18x
+8 KB/rank, N=16      1.17x               1.39x
+512 KB/rank, N=16    0.94x               1.50x
+===================  ==================  ==================
+
+The modex gains at most 6% and is not reliably better at all below a megabyte,
+while the barrier - which shares the tag - loses 18-50%, and the loss grows
+with N because it is paying the exchange's fixed costs (a participant list on
+the wire, log2(N) lateral connections) to move 157 bytes.
+
+The structural finding is the useful part: **FENCE_RELEASE is the one broadcast
+whose tag does not determine its size.** The table's premise - "which of them a
+message is IS the operation" - holds for the launch message and fails here,
+because a barrier's release and a modex's release travel the same tag six
+orders of magnitude apart. That is exactly the situation splitting the launch
+message onto its own tag was meant to remove. So if this is ever worth doing,
+the *fence* must say so - it knows which kind of release it is emitting - by
+plumbing a movement preference through ``prte_grpcomm_release_bcast``, rather
+than the tag table inferring one.
+
+Read the 6% as a lower bound rather than a verdict: the measurement is
+loopback between containers on one host, which is precisely the environment
+where a bandwidth optimisation shows least.
+
 Verification
 ------------
 

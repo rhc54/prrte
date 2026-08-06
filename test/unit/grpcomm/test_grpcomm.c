@@ -71,6 +71,7 @@
 #include "src/grpcomm/grpcomm_internal.h"
 
 static void build_job_with_map(const char *nspace, pmix_rank_t ndaemons);
+static pmix_data_buffer_t *fence_contribution(pmix_proc_t *proc, uint32_t generation);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -870,6 +871,12 @@ static int test_fence_tracker(void)
     pmix_nspace_t save_nspace;
 
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    /* These are statically initialised in the globals and only constructed by
+     * prte_grpcomm_init(), which a unit test does not call. A pmix_list_t from
+     * PMIX_LIST_STATIC_INIT has a NULL-linked sentinel, so appending to one is
+     * a segfault rather than an empty-list no-op. */
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_gens, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.relocated_nspaces, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
     if (NULL == prte_job_data) {
@@ -962,22 +969,56 @@ static int test_fence_tracker(void)
     }
     PMIX_DESTRUCT(&sig);
 
+    /* A contribution for a generation we have already retired must be dropped
+     * on the way in, not turned into a tracker: nothing would ever complete or
+     * delete that tracker. Drive the real receive path, since that is where the
+     * check has to live - get_tracker() alone cannot tell a stale arrival from
+     * a local fence starting. */
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    sig.sz = 1;
+    PMIX_PROC_CREATE(sig.signature, 1);
+    PMIX_LOAD_PROCID(&sig.signature[0], "fence-latejob", PMIX_RANK_WILDCARD);
+    sig.generation = 0;
+    prte_grpcomm_fence_note_retired(&sig);   /* generation 0 is now over */
+    {
+        size_t before = pmix_list_get_size(&prte_grpcomm_globals.fence_ops);
+        pmix_data_buffer_t *msg;
+
+        msg = fence_contribution(&sig.signature[0], 0);
+        prte_grpcomm_fence_recv(0, PRTE_PROC_MY_NAME, msg, PRTE_RML_TAG_FENCE, NULL);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        CHECK("tracker: a contribution for a retired generation builds nothing",
+              before == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+
+        msg = fence_contribution(&sig.signature[0], 1);
+        prte_grpcomm_fence_recv(0, PRTE_PROC_MY_NAME, msg, PRTE_RML_TAG_FENCE, NULL);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        CHECK("tracker: the generation after a retired one is accepted",
+              before < pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+    }
+    PMIX_DESTRUCT(&sig);
+
     /* a signature that is malformed rather than merely early is still refused
      * outright - no later event can make it readable */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
     PMIX_LOAD_PROCID(&sig.signature[0], "", 0);
-    coll = prte_grpcomm_fence_get_tracker(&sig, true);
-    CHECK("tracker: a signature with no nspace yields no tracker", NULL == coll);
-    CHECK("tracker: and leaves no wreckage on the list",
-          2 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+    {
+        size_t before = pmix_list_get_size(&prte_grpcomm_globals.fence_ops);
+        coll = prte_grpcomm_fence_get_tracker(&sig, true);
+        CHECK("tracker: a signature with no nspace yields no tracker", NULL == coll);
+        CHECK("tracker: and leaves no wreckage on the list",
+              before == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+    }
     PMIX_DESTRUCT(&sig);
 
     prte_process_info.num_daemons = save_daemons;
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, save_nspace);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_gens);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.relocated_nspaces);
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
 #endif
 
@@ -1089,6 +1130,26 @@ static void build_job_with_map(const char *nspace, pmix_rank_t ndaemons)
         pmix_pointer_array_set_item(jdata->procs, r, proc);
     }
     jdata->num_procs = ndaemons;
+}
+
+/* Pack a fence contribution the way the wire carries one: the sender's
+ * recovery epoch, then the signature (generation first), the movement, and an
+ * empty info array.  Hand-packed for the same reason stub_xcast hand-unpacks -
+ * it keeps the test honest about the format rather than reusing the packer. */
+static pmix_data_buffer_t *fence_contribution(pmix_proc_t *proc, uint32_t generation)
+{
+    pmix_data_buffer_t *buf;
+    uint32_t movement = PRTE_GRPCOMM_FENCE_TREE_GATHER;
+    size_t sz = 1, ninfo = 0;
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+    PMIx_Data_pack(NULL, buf, &prte_grpcomm_globals.recovery_epoch, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, buf, &generation, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, buf, &sz, 1, PMIX_SIZE);
+    PMIx_Data_pack(NULL, buf, proc, 1, PMIX_PROC);
+    PMIx_Data_pack(NULL, buf, &movement, 1, PMIX_UINT32);
+    PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
+    return buf;
 }
 
 /* Append a tracker standing in for a fence rolling up right now over the
