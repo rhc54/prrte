@@ -308,27 +308,49 @@ int main(int argc, char **argv)
         }
 
         if (verify && 0 < nkeys && 1 < nprocs) {
-            /* Read one key from the next rank round-robin.  This is what
-             * says the collect fence actually moved the bytes rather than
+            /* Read one key from each of two peers.  This is what says the
+             * collect fence actually made the bytes reachable rather than
              * merely synchronizing -- but it is off by default, because the
-             * get itself perturbs the next iteration. */
+             * gets themselves perturb the next iteration.
+             *
+             * Two peers, not one, because a movement need not put the whole
+             * modex on every node: the ring share leaves a daemon holding its
+             * own procs' data and its two neighbors', and everything else is
+             * fetched on demand.  The NEAR peer is the one such a movement
+             * would already have; the FAR peer, half the job away, is the one
+             * that can only come back through a direct modex.  A run that
+             * checks only the near peer would pass with the on-demand path
+             * completely broken. */
             pmix_proc_t peer;
-            uint32_t pr = (myproc.rank + 1) % nprocs;
+            uint32_t peers[2];
+            const char *which[2] = {"NEAR", "FAR"};
+            size_t np = 1;
 
-            PMIX_LOAD_PROCID(&peer, myproc.nspace, pr);
-            snprintf(key, sizeof(key), "st-%u-%zu-%zu", pr, i, (size_t) 0);
-            rc = PMIx_Get(&peer, key, NULL, 0, &vptr);
-            if (PMIX_SUCCESS != rc || NULL == vptr) {
-                printf("SCALE %s RANK %u ITER %zu VERIFY-FAIL %s\n", tag, myproc.rank, i,
-                       PMIx_Error_string(rc));
-            } else if (PMIX_BYTE_OBJECT != vptr->type || vptr->data.bo.size != sizes[0]) {
-                printf("SCALE %s RANK %u ITER %zu VERIFY-BAD size %zu want %zu\n", tag,
-                       myproc.rank, i, (size_t) vptr->data.bo.size, sizes[0]);
-                PMIX_VALUE_RELEASE(vptr);
-            } else {
-                printf("SCALE %s RANK %u ITER %zu VERIFY-OK %zu bytes from rank %u\n", tag,
-                       myproc.rank, i, (size_t) vptr->data.bo.size, pr);
-                PMIX_VALUE_RELEASE(vptr);
+            peers[0] = (myproc.rank + 1) % nprocs;
+            if (3 < nprocs) {
+                peers[1] = (myproc.rank + nprocs / 2) % nprocs;
+                np = 2;
+            }
+            for (size_t p = 0; p < np; p++) {
+                uint32_t pr = peers[p];
+
+                PMIX_LOAD_PROCID(&peer, myproc.nspace, pr);
+                snprintf(key, sizeof(key), "st-%u-%zu-%zu", pr, i, (size_t) 0);
+                rc = PMIx_Get(&peer, key, NULL, 0, &vptr);
+                if (PMIX_SUCCESS != rc || NULL == vptr) {
+                    printf("SCALE %s RANK %u ITER %zu VERIFY-FAIL %s %s\n", tag,
+                           myproc.rank, i, which[p], PMIx_Error_string(rc));
+                } else if (PMIX_BYTE_OBJECT != vptr->type || vptr->data.bo.size != sizes[0]) {
+                    printf("SCALE %s RANK %u ITER %zu VERIFY-BAD %s size %zu want %zu\n",
+                           tag, myproc.rank, i, which[p],
+                           (size_t) vptr->data.bo.size, sizes[0]);
+                    PMIX_VALUE_RELEASE(vptr);
+                } else {
+                    printf("SCALE %s RANK %u ITER %zu VERIFY-OK %s %zu bytes from rank %u\n",
+                           tag, myproc.rank, i, which[p],
+                           (size_t) vptr->data.bo.size, pr);
+                    PMIX_VALUE_RELEASE(vptr);
+                }
             }
         }
 

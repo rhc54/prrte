@@ -60,6 +60,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`salloc`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 | `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
+| `mpinoop.c` | `MPI_Init` and `MPI_Finalize` and nothing else, so the only thing timed is the modex fence and the barrier behind it. Built only when `OMPI_SRC` is set — see §19. |
 | `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
 
 ## 2. How it works
@@ -1544,3 +1545,66 @@ with a flat one at the same size, and how much of the total is payload
 (`data_cost_us`) versus tree latency (`barrier_med_us`). Treat absolute
 values as meaningful only against another run on the same host with the same
 load.
+
+### Checking a fence still *delivers*, not just that it is fast
+
+`scaletest --verify` reads one key back from two peers each iteration: a
+**NEAR** one (rank+1) and a **FAR** one (half the job away). Both, not one,
+and the reason is specific: a fence movement need not put the whole modex on
+every node. `neighbor_share` leaves a daemon holding its own procs' data and
+its two ring neighbours', and everything else is fetched on demand by direct
+modex — so under `--map-by ppr:1:node` the NEAR peer is exactly the one the
+movement already has, and a verify that checked only it would pass with the
+on-demand path completely broken.
+
+It stays **off by default**, for the same reason `--neighbors` does: a get
+perturbs the collective beside it, and a run that measures and verifies at
+once measures neither cleanly.
+
+## 19. Running a real MPI job (`OMPI_SRC`, `mpinoop`, `ring_c`)
+
+Every other client in this harness puts data because a test told it to. An
+**MPI** job publishes what its transports actually need and then reads back
+exactly the peers it talks to, which is the only workload here that can judge
+whether a fence movement delivers enough. That is what this is for.
+
+```sh
+OMPI_SRC=/path/to/ompi ./build.sh          # or: OMPI_SRC=... ./scaletest.sh build
+```
+
+The checkout must be **autogen'd and not configured in-tree** — the same rule
+as `PMIX_SRC`, and for the same reason: `configure` runs VPATH over a
+read-only bind mount. Open MPI is built `--with-prrte=external` against the
+install this script just made, so `mpirun` **is** this PRRTE and an MPI job
+can be run under any `grpcomm_fence_movement`. Fortran, OpenSHMEM and sphinx
+are disabled: the first two dominate the build time and nothing here uses
+them, and the docs build needs python modules the image does not carry — it is
+the one part of an Open MPI build that fails for a reason having nothing to do
+with MPI.
+
+It is **off by default** because it roughly triples the build. Only the
+collective work needs it.
+
+Two probes land in `/opt/prte/ompi/bin`:
+
+- **`mpinoop`** — `MPI_Init`, `MPI_Finalize`, nothing else. So the only thing
+  timed is the modex fence and the barrier behind it, with none of an
+  application's own communication on top. It times `MPI_Init` with
+  `clock_gettime`, **not** `MPI_Wtime`, which may not be called before
+  `MPI_Init` — the first version of this file did, and reported a negative
+  init time.
+- **`ring_c`** — Open MPI's own example, compiled from the mounted checkout. A
+  real neighbour exchange, which is the pattern `neighbor_share` exists for.
+
+The Open MPI knobs worth knowing when driving these:
+
+| MCA parameter | effect |
+|---------------|--------|
+| `pmix_base_async_modex` | skip the modex fence in `MPI_Init` entirely; peers are resolved on first use |
+| `pmix_base_collect_data` | whether the `MPI_Init` fence sets `PMIX_COLLECT_DATA` |
+| `mpi_add_procs_cutoff` | above this job size, do not add every peer at init |
+
+Those three are the application-side half of the same argument the fence
+movements make from the daemon side, and a movement that only looks good
+against `scaletest` should be checked against at least `ring_c` before it is
+believed.
