@@ -1587,12 +1587,26 @@ collective work needs it.
 
 Two probes land in `/opt/prte/ompi/bin`:
 
-- **`mpinoop`** — `MPI_Init`, `MPI_Finalize`, nothing else. So the only thing
-  timed is the modex fence and the barrier behind it, with none of an
-  application's own communication on top. It times `MPI_Init` with
-  `clock_gettime`, **not** `MPI_Wtime`, which may not be called before
-  `MPI_Init` — the first version of this file did, and reported a negative
-  init time.
+- **`mpinoop`** — `MPI_Init`, `MPI_Finalize`, and optionally one phase of
+  actual communication. It times `MPI_Init` with `clock_gettime`, **not**
+  `MPI_Wtime`, which may not be called before `MPI_Init` — the first version
+  of this file did, and reported a negative init time.
+
+  **With no flag it is the wrong probe for a fence movement**, and knowing why
+  is the whole point of the file. Open MPI resolves a remote peer the *first
+  time it talks to it*: `mpi_add_procs_cutoff` defaults to 0 so the
+  pre-add-everybody branch never runs, and `ob1` demands the whole world only
+  when a BTL sets `MCA_BTL_FLAGS_SINGLE_ADD_PROCS` (TCP does that only with
+  more than one interface plus threads). So a program that calls `MPI_Init`
+  and exits issues **zero** direct-modex requests and every movement looks
+  identical — measured, and briefly believed to mean something.
+
+  `--ring` (exchange with the two neighbours) and `--all` (explicit
+  point-to-point with **every** other rank) are what actually separate them.
+  `--all` is deliberately not `MPI_Alltoall`: a tuned alltoall on one int runs
+  Bruck and contacts about log2(N) partners, so it understates the case badly.
+  Each phase is timed twice — first touch, then a repeat with every peer
+  already resolved — so resolution cost is isolated rather than inferred.
 - **`ring_c`** — Open MPI's own example, compiled from the mounted checkout. A
   real neighbour exchange, which is the pattern `neighbor_share` exists for.
 
@@ -1608,3 +1622,14 @@ Those three are the application-side half of the same argument the fence
 movements make from the daemon side, and a movement that only looks good
 against `scaletest` should be checked against at least `ring_c` before it is
 believed.
+
+**Counting direct-modex requests needs `--leave-session-attached`.** The
+`DMODX REQ FOR` traces come out on each `prted`'s stderr, and without that
+flag only the master daemon's reach you — so the count is a fraction of the
+DVM's and looks reassuringly small. It was: 6 requests became 80 for the same
+run once the other seven daemons were being read.
+
+```sh
+prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
+    /opt/prte/ompi/bin/mpinoop --all 2>&1 | grep -c "DMODX REQ FOR"
+```

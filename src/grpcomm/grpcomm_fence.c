@@ -2319,6 +2319,15 @@ void prte_grpcomm_fence_neighbor_recv(int status, pmix_proc_t *sender,
          * later generation and got its own tracker above. */
         return;
     }
+    /* The interlock, in both directions. Using this tag at all is an
+     * assertion of neighbor_share, so anything else stamped on it is a
+     * disagreement even before our own tracker is consulted - and a tracker
+     * that has already heard from somebody adopted *their* movement, so
+     * telling it something else now is the same disagreement seen from the
+     * other side. Only a tracker with no opinion yet adopts what it is told;
+     * that test is `no contributions', exactly as fence_recv() has it,
+     * because the constructor's default is a real movement rather than a
+     * "none" the two could be told apart by. */
     if (PRTE_GRPCOMM_FENCE_NEIGHBOR != movement) {
         const fence_movement_t *theirs = fence_movement_by_id(movement);
         prte_show_help("help-prte-grpcomm.txt", "fence-movement-mismatch", true,
@@ -2328,7 +2337,17 @@ void prte_grpcomm_fence_neighbor_recv(int status, pmix_proc_t *sender,
         abort_fence_op(coll, PMIX_ERR_NOT_SUPPORTED);
         return;
     }
-    coll->movement = movement;
+    if (0 == coll->nreported && !coll->self_reported) {
+        coll->movement = movement;
+    } else if (PRTE_GRPCOMM_FENCE_NEIGHBOR != coll->movement) {
+        const fence_movement_t *ours = fence_movement_by_id(coll->movement);
+        prte_show_help("help-prte-grpcomm.txt", "fence-movement-mismatch", true,
+                       prte_process_info.nodename,
+                       (NULL == ours) ? "unknown" : ours->name,
+                       PRTE_NAME_PRINT(sender), "neighbor_share");
+        abort_fence_op(coll, PMIX_ERR_NOT_SUPPORTED);
+        return;
+    }
 
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &blob, &cnt, PMIX_BYTE_OBJECT);

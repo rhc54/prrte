@@ -929,37 +929,85 @@ What a real MPI job says, and it is not what the benchmark says
 The table above is ``scaletest``, which contributes 8 KB to 512 KB a rank
 because it was written to make the collective visible. Open MPI was then built
 into the same swarm (``OMPI_SRC``, see the harness guide) and run under all
-three movements. The result is worth stating plainly because it cuts against
-the benchmark:
+three movements.
 
-**At 16 ranks Open MPI's entire modex is 1319 bytes.** That is the whole
-release payload the controller broadcasts - about 82 bytes a rank - measured
-with ``grpcomm_base_verbose 5``. ``MPI_Init`` took 26-29 ms and ``MPI_Finalize``
-43-47 ms under **every** movement, indistinguishable across three runs each.
-At 64 ranks over 16 nodes it is 93-102 ms under the rollup and 94-96 ms under
-the ring: still no difference. ``ring_c`` completes correctly under all three.
+**Open MPI already resolves peers on first use, which is the design this
+movement is betting on.** Confirmed in the source rather than assumed:
+``OMPI_ADD_PROCS_CUTOFF_DEFAULT`` is 0, so the "pre-add every proc" branch in
+``ompi_proc_complete_init()`` never runs; ``ob1`` demands the whole world only
+when a BTL sets ``MCA_BTL_FLAGS_SINGLE_ADD_PROCS``, and the TCP BTL sets that
+only with more than one TCP module plus threads. So ``MPI_Init`` adds the
+node-local peers and nothing else, and each remote proc materializes through
+``ompi_proc_for_name()`` when a communication operation first names it. Open
+MPI is not fetching modex data it does not need, which is exactly why direct
+modex was supposed to work.
 
-Two things follow.
+**That makes a bare MPI_Init/MPI_Finalize the wrong probe**, and the first
+version of ``mpinoop`` was exactly that. It never sends a message, so it never
+touches a remote peer, so it issues **zero** direct-modex requests and every
+movement looks identical - which is what it reported, and the reading "the
+dmodex fan-out did not bite" was an artifact of measuring nothing. What
+separates the movements is **first touch**. ``mpinoop`` now has ``--ring``
+(each rank exchanges with its two neighbours) and ``--all`` (explicit
+point-to-point with every other rank).
 
-**The movement is invisible when the modex is small, and a real modex is
-small** - at least for a TCP-only build. This Open MPI has no UCX and no OFI
-(the container has neither), and those are exactly the transports that publish
-a large per-rank endpoint blob. So the honest statement is that the ring share
-costs nothing and buys nothing on a small TCP job, and the case for it rests
-on jobs whose per-rank contribution is large, whose rank count is large, or
-both. The benchmark is not wrong; it is measuring a regime this particular MPI
-job is nowhere near.
+``--all`` is deliberately not ``MPI_Alltoall``: a tuned alltoall on one int
+runs Bruck and contacts about log2(N) partners, which understated the case
+badly - it left a daemon fetching six peers where the honest answer is every
+peer it does not hold.
 
-**The dmodex fan-out did not bite, which was the real risk.** Under the ring
-a daemon holds only its own procs and its two neighbours', so if ``MPI_Init``
-eagerly resolved every peer it would turn one broadcast into N-3 round trips
-and the ring would be *worse*, not merely neutral. At 64 ranks it was not -
-which says Open MPI is not fetching every peer at init here. Worth re-checking
-before trusting the ring at scale, and ``mpi_add_procs_cutoff`` is the knob
-that decides it.
+Direct-modex requests counted across **every** daemon (``pmix_server_verbose
+2`` plus ``--leave-session-attached``; without that flag only the master's
+daemon reports and the count is a fraction of the truth):
 
-So: keep both measurements, and do not quote the benchmark ratio as if it were
-an application result.
+========  ======  =========  ==============  ============
+ranks     nodes   pattern    tree            neighbor
+========  ======  =========  ==============  ============
+16        8       none       0               5
+16        8       ring       0               35
+16        8       all        0               80
+32        16      none       0               13
+32        16      ring       0               106
+32        16      all        0               416
+========  ======  =========  ==============  ============
+
+The ``all`` row is the design stated in arithmetic and confirmed exactly: each
+daemon holds its own procs plus its two ring neighbours' - 6 ranks of 32 - and
+must fetch the other 26, times 16 daemons, is 416. Under the rollup it is
+always zero, because the broadcast already delivered everything.
+
+Cost, and this is where it turns against the ring:
+
+* **all-to-all**: first touch 43.6 ms under the rollup, 123.1 ms under the
+  ring at 32 ranks - about 2.8x worse, and the *repeat* exchange was worse
+  too. Paying ~26 round trips a daemon to reconstruct a modex the broadcast
+  had already delivered is straightforwardly a loss.
+* **neighbour exchange**: a wash. Medians over four runs at 32 ranks were
+  ~21 ms under the rollup and ~25 ms under the ring. A single earlier sample
+  showed the ring 3.7x *faster*; repeating it showed that was noise, and it
+  is recorded here because it is exactly the kind of number that gets quoted.
+
+So on this workload the ring share ranges from neutral to clearly worse, and
+the reason is the same one in both directions: **Open MPI's whole modex here
+is 1319 bytes at 16 ranks** - about 82 bytes a rank, measured off the release
+with ``grpcomm_base_verbose 5``. There is nothing for a cleverer movement to
+save. A direct-modex round trip costs on the order of a few hundred
+microseconds regardless of payload, so the crossover is where broadcasting the
+modex costs more than one round trip per peer actually needed: at ~4-6 peers
+that is a millisecond or two of fetching, which the rollup does not reach
+until several KB a rank. This job is three orders of magnitude below that.
+
+Two things this does **not** say. It is a TCP-only build - no UCX, no OFI -
+and those are precisely the transports that publish a large per-rank endpoint
+blob; the regime where the ring wins is one this build cannot enter. And it is
+16-32 ranks, where N**2 fetching is still small in absolute terms.
+
+The conclusion to carry forward is therefore not "the ring share is bad" but
+**the per-rank modex size is the whole variable**, and no movement should be
+chosen without it. That is the strongest argument yet for leaving ``neighbor``
+opt-in rather than wiring it into ``auto`` - and for treating
+``PMIX_COLLECT_DATA`` as too coarse a discriminator, since it says whether the
+caller wants the data and nothing about how much of it there is.
 
 **And it is not reachable from ``auto``.** Unlike ``tree`` and ``allgather``,
 this movement changes what a fence *delivers*, not merely how it travels - a
