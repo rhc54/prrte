@@ -923,6 +923,44 @@ and nothing else. It should not be widened speculatively: the ring is the
 cheapest thing that covers the neighbour-exchange pattern real applications
 use, and every extra hop is bytes moved on a guess.
 
+What a real MPI job says, and it is not what the benchmark says
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The table above is ``scaletest``, which contributes 8 KB to 512 KB a rank
+because it was written to make the collective visible. Open MPI was then built
+into the same swarm (``OMPI_SRC``, see the harness guide) and run under all
+three movements. The result is worth stating plainly because it cuts against
+the benchmark:
+
+**At 16 ranks Open MPI's entire modex is 1319 bytes.** That is the whole
+release payload the controller broadcasts - about 82 bytes a rank - measured
+with ``grpcomm_base_verbose 5``. ``MPI_Init`` took 26-29 ms and ``MPI_Finalize``
+43-47 ms under **every** movement, indistinguishable across three runs each.
+At 64 ranks over 16 nodes it is 93-102 ms under the rollup and 94-96 ms under
+the ring: still no difference. ``ring_c`` completes correctly under all three.
+
+Two things follow.
+
+**The movement is invisible when the modex is small, and a real modex is
+small** - at least for a TCP-only build. This Open MPI has no UCX and no OFI
+(the container has neither), and those are exactly the transports that publish
+a large per-rank endpoint blob. So the honest statement is that the ring share
+costs nothing and buys nothing on a small TCP job, and the case for it rests
+on jobs whose per-rank contribution is large, whose rank count is large, or
+both. The benchmark is not wrong; it is measuring a regime this particular MPI
+job is nowhere near.
+
+**The dmodex fan-out did not bite, which was the real risk.** Under the ring
+a daemon holds only its own procs and its two neighbours', so if ``MPI_Init``
+eagerly resolved every peer it would turn one broadcast into N-3 round trips
+and the ring would be *worse*, not merely neutral. At 64 ranks it was not -
+which says Open MPI is not fetching every peer at init here. Worth re-checking
+before trusting the ring at scale, and ``mpi_add_procs_cutoff`` is the knob
+that decides it.
+
+So: keep both measurements, and do not quote the benchmark ratio as if it were
+an application result.
+
 **And it is not reachable from ``auto``.** Unlike ``tree`` and ``allgather``,
 this movement changes what a fence *delivers*, not merely how it travels - a
 caller that set ``PMIX_COLLECT_DATA`` does not get the whole modex back. That
