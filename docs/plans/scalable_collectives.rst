@@ -783,6 +783,57 @@ Read the 6% as a lower bound rather than a verdict: the measurement is
 loopback between containers on one host, which is precisely the environment
 where a bandwidth optimisation shows least.
 
+Measuring the ring's bargain without implementing a ring
+--------------------------------------------------------
+
+``PMIX_Ring`` has no PMIx API to sit behind - it was PMI2's - and no internal
+PRRTE caller wants a scan either: rank assignment is central at the HNP and the
+bulk broadcast derives its chunk bounds arithmetically. Writing
+``prte_grpcomm_scan`` today would be a protocol with no consumer, which is the
+thing this document already argues against building.
+
+But the *question* the ring answers is testable with what PRRTE has. The ring's
+bargain is "pay O(1) for the peers you actually need instead of O(N) for
+everybody", and both halves exist: a collect fence is the O(N) side, and a
+barrier followed by ``PMIx_Get`` of a specific peer is the O(1) side, answered
+by direct modex. ``scaletest --neighbors`` times the second: after the barrier,
+each rank fetches only its left and right neighbour, serially, which is the
+pessimistic reading of the pattern.
+
+Measured at radix 2, one proc per node, medians over three iterations:
+
+=====  ========  ============  ==================  ==========
+N      KB/rank   full modex    barrier + 2 gets    ring/modex
+=====  ========  ============  ==================  ==========
+8      8         2401          823                 0.34
+8      128       12152         901                 0.07
+16     8         6356          1570                0.25
+16     128       31215         1697                0.05
+=====  ========  ============  ==================  ==========
+
+The gets are nearly payload-independent - 229us against 256us for sixteen times
+the data per peer - because the number fetched does not depend on what anyone
+else contributed. The modex grows on both axes. So the ring pattern is already
+3-20x cheaper at these small sizes and pulls further ahead with N and with
+payload, which is the argument for it stated in PRRTE's own numbers rather than
+by analogy.
+
+The extension worth noticing: at 16 nodes and 128 KB a rank, one get costs
+~252us against a 31 ms modex, so break-even is around 124 peers - more ranks
+than the job has. At these sizes fetching *every* peer on demand would still
+beat collecting, which says the interesting lever is not a faster allgather but
+how much of the modex an application can be persuaded not to ask for.
+
+Two cautions on the measurement. The gets are serial, so a pipelined
+implementation would do better than this, not worse; and this is direct modex
+over loopback between containers, where a round trip is cheap relative to real
+hardware - the ratio would move, the shape would not.
+
+**Do not read the COLLECT column out of a ``--neighbors`` run.** The phase is
+off by default for the same reason ``--verify`` is: a get perturbs the
+collective beside it. That is not theoretical here - it was measured, and it
+cost an afternoon.
+
 Verification
 ------------
 
