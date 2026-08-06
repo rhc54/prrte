@@ -168,6 +168,28 @@ would be a dangling write the moment registration returns.
   list, counting `nexpected` vs `nreported`. When a tracker completes
   locally it rolls up to the parent; when the HNP's tracker completes it
   broadcasts the release.
+- **`converged` means "*I* am done with this collective", not "the
+  collective is done".** This is the single easiest thing to misread in
+  this code, so be precise about it. `check_complete()` sets the flag the
+  moment *this daemon* has everything it owes and has answered — which on
+  a non-controller means it rolled its aggregate up to its parent, and on
+  the controller means it broadcast the release. It does **not** mean the
+  collective finished, and on a non-controller it says nothing about the
+  release, which arrives later and is what actually hands data to the
+  local clients and retires the tracker.
+
+  That gap — converged here, release not yet here — is a real and
+  routinely-occupied state, and two rules depend on reading the flag this
+  way:
+
+  - The controller-only tests in the recovery restart (see *Surviving a
+    daemon failure*) are guarded by `PRTE_PROC_IS_MASTER` precisely
+    because `converged` means something weaker everywhere else.
+  - A contribution arriving at a converged tracker cannot belong to the
+    collective that tracker represents — this daemon has already answered
+    it — so it belongs to the **next** collective over the same
+    signature. See *A fence ends at a different moment on every daemon*
+    below.
 - **Two-phase collective.** `fence`/`group` are an **up-tree allgather**
   followed by a **down-tree release**. `xcast` itself is the down-tree
   half, made reliable with an ACK rollup.
@@ -452,6 +474,126 @@ because an allgather has no opt-in to running degraded, so the controller
 ends it with `PMIX_ERR_LOST_CONNECTION`. Note the difference from a group
 construct, which *can* complete on survivors when asked: a fence has no
 equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
+
+### Learning a generation after a relocation
+
+The generation is derived by **counting** the fences over a signature this
+daemon has retired. That is right only if it took part in all of them, and one
+thing breaks it: a proc **relocated onto a daemon that never hosted one of that
+job**. Its clients enter fence *k* while this daemon has counted none, so it
+would stamp 0 and disagree with every other participant.
+
+The daemon can see it happen — the launch that places a restarted proc carries
+`PRTE_JOB_FLAG_RESTART` — so the launch path calls
+`prte_grpcomm_fence_note_relocation()`, and a signature naming such a namespace
+switches from *deriving* a generation to *learning* one: the first fence over
+it takes its generation from the tracker an arriving contribution has already
+built for the same participants. After that the memo is in step and counting
+resumes.
+
+That covers it in practice, because a relocated proc is by definition the one
+that just came back: its partners are already running and already sending to
+it. **Today a proc is only relocated onto a new daemon after a daemon
+failure**, so that is the whole of the reachable problem.
+
+**The corner it does not cover, and how to close it if it becomes
+reachable.** If the newcomer enters the fence before *any* contribution has
+reached it, there is nothing to learn from, and it falls back to counting —
+which is the wrong answer. Closing that needs the newcomer to **ask**: a query
+to the surviving participants (or one designated among them) for the current
+generation of that signature, on the relocation path only. It is deliberately
+not built, because it is unreachable today and an unused protocol is an untested
+one; the verbose message "relocated participants but no contribution to learn a
+generation from" is the marker that it has become reachable. Do not reach for a
+DVM-wide generational counter instead: agreeing one costs a collective of its
+own, and the whole point of deriving it locally is that no agreement is needed.
+
+### A contribution can arrive before the job it names
+
+A daemon relays the launch broadcast to its children **before** it acts on its
+own copy, so a child can build its child list, launch its procs, have them call
+`PMIx_Fence`, and roll the contribution up to its parent before that parent has
+finished building the same job. `create_dmns()` then has no map to derive the
+participants from and answers `PRTE_ERR_NOT_FOUND`.
+
+The contribution is real and nobody will ever send it again, so it must not be
+dropped - which it was, and the parent then sized its tracker correctly a
+moment later and waited forever for what it had thrown away. The only trace was
+a `PRTE ERROR: Not found` on a *daemon's* stderr, which is normally invisible.
+
+So `get_tracker()` distinguishes two failures that used to look alike:
+
+- **`PRTE_ERR_NOT_FOUND` - we do not know this job yet.** Keep the tracker and
+  set `unresolved`. Contributions merge into its bucket as usual; the subtree
+  accounting is routing-tree based and needs no job.
+  `prte_grpcomm_fence_resolve_pending()`, called at the end of
+  `construct_child_list()`, sizes it and re-tests it.
+- **anything else - the signature is unreadable.** Still refused outright, and
+  the half-built tracker still removed: no later event can rescue it.
+
+`check_complete()` must refuse to converge an unresolved tracker. An unsized
+rollup expects nothing, so it would otherwise answer immediately with data it
+never gathered - which is the hazard the original destroy-it behaviour was
+guarding against, and the reason the flag exists rather than just leaving
+`nexpected` at zero.
+
+Nothing predicts which fence arrives first: the tracker is built from whatever
+signature turns up, so an early fence over some arbitrary subset of procs
+simply gets its own tracker and is resolved independently.
+
+### A fence ends at a different moment on every daemon
+
+Two fences over the same participants are **not** allowed to run at once —
+that is a rule on the caller, and PMIx has no way to serve it if broken. But
+that rule says nothing about the daemons: a fence finishes at a different
+instant on each of them, so at any moment some daemons are in fence *N* and
+others have already started *N+1*. Since a signature is just the participant
+list, those two fences are **indistinguishable to `get_tracker()`**, and
+everything below exists to keep *N+1*'s traffic from being mistaken for late
+*N* traffic and thrown away.
+
+**Retire the tracker the moment the fence ends here, before anything that
+could start the next one.** Both retirement sites — `fence_release()` for the
+rollup and `rd_allgather_answer()` for the exchange — take the tracker off
+`fence_ops` *first*, and only then run `cbfunc`. The callback completes the
+local clients' `PMIx_Fence`, and a client may call the next fence over the
+same participants the instant it returns; with the tracker still listed, that
+fence finds the one that just ended. Both sites had it the other way round,
+and both hung.
+
+**That is necessary but not sufficient, because the release and the exchange
+do not travel the same route.** The release comes down the routing tree; an
+`rd_allgather`'s blocks go straight across on `PRTE_RML_TAG_FENCE_EXCHANGE` to
+Bruck partners, which have nothing to do with the tree. So a partner that
+received *its* copy of the release first can legally begin fence *N+1* and
+reach us before our own copy of *N*'s release has — measured between two
+daemons at the *same* tree depth, which is enough on a loaded host. There is
+no ordering within the receiving daemon that helps: the event that would
+trigger it has not happened yet.
+
+**So a contribution that lands on a converged tracker is held, not dropped.**
+`converged` is the discriminator, and it is sound: it means this daemon has
+already answered this fence (see the definition under *The collective model*),
+and two identical fences cannot overlap, so the arrival can only belong to the
+next one. `hold_for_next_fence()` keeps the message whole — its unread
+remainder plus the epoch stamp, signature and movement the prologue had
+already taken off the front — and `replay_held()` re-posts it to this daemon
+once the tracker is retired, so it takes the ordinary receive path from the
+top and lands on the fresh tracker.
+
+Four details are load-bearing:
+
+- **Hold *before* the movement interlock.** Adjacent fences routinely differ
+  in movement (a barrier then a modex), so comparing the next fence's
+  movement against this one's reports a disagreement and aborts a collective
+  that is perfectly healthy.
+- **Keep the original epoch stamp, not the current one.** A recovery between
+  the hold and the replay must still make the message stale, which the
+  ordinary epoch check on the way back in will decide.
+- **Replay after the tracker leaves the list**, or the replayed message finds
+  it again and is held a second time.
+- **The restart drops everything held**, because its epoch is the one the
+  failure ended.
 
 ### The fence's movements
 

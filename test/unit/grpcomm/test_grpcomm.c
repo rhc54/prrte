@@ -65,9 +65,12 @@
 #include "src/class/pmix_bitmap.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
+#include "src/mca/rmaps/rmaps_types.h"
 
 #include "src/grpcomm/grpcomm.h"
 #include "src/grpcomm/grpcomm_internal.h"
+
+static void build_job_with_map(const char *nspace, pmix_rank_t ndaemons);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -923,19 +926,52 @@ static int test_fence_tracker(void)
           1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
-    /* a signature we cannot resolve at all - no such job, and nothing has
-     * failed, so this is a genuine error rather than a torn-down node */
+    /* A signature naming a job we have not built yet is NOT an error, and the
+     * contribution that carried it must not be lost. A daemon relays the
+     * launch broadcast to its children before acting on its own copy, so a
+     * child can launch, fence, and roll up before we know the job exists.
+     * The tracker is kept and left unsized until the job arrives. */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
-    PMIX_LOAD_PROCID(&sig.signature[0], "fence-nosuchjob", 0);
+    PMIX_LOAD_PROCID(&sig.signature[0], "fence-latejob", PMIX_RANK_WILDCARD);
     coll = prte_grpcomm_fence_get_tracker(&sig, true);
-    CHECK("tracker: an unresolvable signature yields no tracker", NULL == coll);
+    CHECK("tracker: a job we do not know yet is held, not refused", NULL != coll);
+    if (NULL != coll) {
+        CHECK("tracker: ...and says so", coll->unresolved);
+        CHECK("tracker: ...expecting nothing until it can be sized",
+              0 == coll->nexpected && 0 == coll->ndmns);
+    }
+    CHECK("tracker: ...and stays on the list for the contribution to land on",
+          2 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
+    /* the same signature finds it again rather than building a second */
+    again = prte_grpcomm_fence_get_tracker(&sig, false);
+    CHECK("tracker: a held tracker is found on a second look", again == coll);
+
+    /* now the job turns up, as it does when construct_child_list finishes */
+    build_job_with_map("fence-latejob", 3);
+    prte_grpcomm_fence_resolve_pending();
+    if (NULL != coll) {
+        CHECK("tracker: resolves once the job is known", !coll->unresolved);
+        /* the participants now come from the job's map. How many
+         * contributions that means is the routing tree's business and is
+         * pinned down by the daemon-job case above; what matters here is
+         * that the set was derived at all, which it could not be before. */
+        CHECK("tracker: ...and is sized from the job's daemons",
+              3 == coll->ndmns && NULL != coll->dmns);
+    }
+    PMIX_DESTRUCT(&sig);
+
+    /* a signature that is malformed rather than merely early is still refused
+     * outright - no later event can make it readable */
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    sig.sz = 1;
+    PMIX_PROC_CREATE(sig.signature, 1);
+    PMIX_LOAD_PROCID(&sig.signature[0], "", 0);
+    coll = prte_grpcomm_fence_get_tracker(&sig, true);
+    CHECK("tracker: a signature with no nspace yields no tracker", NULL == coll);
     CHECK("tracker: and leaves no wreckage on the list",
-          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
-    /* ...so asking again is a fresh attempt, not a hand-back of the wreck */
-    coll = prte_grpcomm_fence_get_tracker(&sig, false);
-    CHECK("tracker: nothing to find on a second look", NULL == coll);
+          2 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
     prte_process_info.num_daemons = save_daemons;
@@ -966,6 +1002,7 @@ static int stub_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg)
     size_t sz = 0;
     pmix_proc_t *procs = NULL;
     pmix_status_t st = PMIX_SUCCESS;
+    uint32_t generation = 0;
     int32_t cnt;
 
     fence_xcast_calls++;
@@ -973,7 +1010,13 @@ static int stub_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg)
     fence_xcast_status = PMIX_SUCCESS;
     fence_xcast_nspace[0] = '\0';
 
-    /* read it back the way fence_release() does - signature, then status */
+    /* read it back the way fence_release() does - signature, then status.
+     * The signature opens with its generation, which is what tells one fence
+     * over a participant set from the next one over the same set. */
+    cnt = 1;
+    if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, msg, &generation, &cnt, PMIX_UINT32)) {
+        return PRTE_SUCCESS;
+    }
     cnt = 1;
     if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, msg, &sz, &cnt, PMIX_SIZE)) {
         return PRTE_SUCCESS;
@@ -1017,6 +1060,35 @@ static void build_job(const char *nspace, pmix_rank_t nprocs)
         pmix_pointer_array_set_item(jdata->procs, r, proc);
     }
     jdata->num_procs = nprocs;
+}
+
+/* As build_job, but with a job map whose nodes carry daemons - which is what
+ * create_dmns() walks to work out the participants of a wildcard fence. */
+static void build_job_with_map(const char *nspace, pmix_rank_t ndaemons)
+{
+    prte_job_t *jdata;
+    prte_node_t *node;
+    prte_proc_t *proc, *dmn;
+    pmix_rank_t r;
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
+    prte_set_job_data_object(jdata);
+    jdata->map = PMIX_NEW(prte_job_map_t);
+
+    for (r = 0; r < ndaemons; r++) {
+        node = PMIX_NEW(prte_node_t);
+        dmn = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&dmn->name, PRTE_PROC_MY_NAME->nspace, r);
+        node->daemon = dmn;
+        pmix_pointer_array_set_item(jdata->map->nodes, r, node);
+        jdata->map->num_nodes++;
+        proc = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&proc->name, jdata->nspace, r);
+        proc->node = node;
+        pmix_pointer_array_set_item(jdata->procs, r, proc);
+    }
+    jdata->num_procs = ndaemons;
 }
 
 /* Append a tracker standing in for a fence rolling up right now over the

@@ -130,6 +130,26 @@ PRTE_EXPORT int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
                                    const pmix_info_t info[], size_t ninfo, char *data,
                                    size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata);
 
+/* Size any fence tracker that was left waiting on a job this daemon had not
+ * built yet, and re-test it.  A daemon relays the launch broadcast to its
+ * children before acting on its own copy, so a child can launch, fence, and
+ * roll its contribution up to us before we know the job - at which point the
+ * participants cannot be derived and the tracker is held unsized rather than
+ * thrown away.  Call this once a job has been constructed locally; that is the
+ * only event that can change the answer.  Cheap when nothing is waiting, which
+ * is the overwhelmingly common case. */
+PRTE_EXPORT void prte_grpcomm_fence_resolve_pending(void);
+
+/* Tell grpcomm that procs of this namespace arrived here by restart.
+ *
+ * A fence's generation - which tells one fence over a participant set from the
+ * next over the same set - is derived by counting the fences this daemon has
+ * retired, which is only right if it took part in all of them.  A proc
+ * relocated onto a daemon that never hosted one of that job breaks that, so
+ * such a daemon learns the generation from the traffic instead of counting.
+ * Called from the launch path when PRTE_JOB_FLAG_RESTART is set. */
+PRTE_EXPORT void prte_grpcomm_fence_note_relocation(const pmix_nspace_t nspace);
+
 /* PMIx group construct/destruct/cancel.  Basically a fence, but with enough
  * differences - context-id assignment, membership assembly, bootstrap - to
  * warrant its own path rather than over-complicating the fence code. */

@@ -975,6 +975,22 @@ next:
         PRTE_ERROR_LOG(rc);
         cd->rstatus = PMIX_ERROR;
     }
+    /* Procs that arrived by restart may be joining fences that are already
+     * under way, and this daemon may never have hosted one of this job before -
+     * so it cannot count its way to the right fence generation and must learn
+     * it from the traffic instead. */
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
+        prte_grpcomm_fence_note_relocation(jdata->nspace);
+    }
+
+    /* This job is built out now, which is the one event that can size a fence
+     * tracker left waiting on it. A child daemon rolls its subtree up as soon
+     * as its own procs enter a fence, and it can do that before we get this
+     * far with the very same job - we relay the launch broadcast downward
+     * before we act on our own copy - so its contribution may already be
+     * sitting in an unsized tracker. */
+    prte_grpcomm_fence_resolve_pending();
+
     /* release our sentinel - if everything already reported,
      * this progresses the launch */
     job_reg_join(cd);

@@ -631,6 +631,62 @@ The wire interlock still matters and is unchanged: it is what catches a
 genuinely non-uniform request, and it turns it into a named ``show_help``
 diagnostic rather than a DVM-wide hang.
 
+Telling one fence from the next over the same participants
+----------------------------------------------------------
+
+A fence's signature is its participant list, and a job fences over the same
+list repeatedly. Consecutive fences are **not** separated in time on the
+daemons: a fence ends at a different instant on each of them, and — once the
+exchange movement is in play — the release comes down the tree while the
+exchange's blocks go straight across, so a partner that finished first legally
+sends the next fence's traffic to a daemon still working on this one. Two
+observed consequences, both traced in the container harness at 16 daemons:
+
+* the next fence's contribution lands on the current fence's tracker and is
+  dropped when that tracker is retired — a DVM-wide hang with no diagnostic;
+* between two *consecutive allgathers* it is worse than a hang: the block goes
+  to the same slot as the current fence's, ``xch_store()`` refuses it because
+  the slot is already held, and the result is silently short.
+
+Two things are needed, and the first is not sufficient on its own.
+
+**Retire the tracker before anything can start the next fence.** Both
+retirement sites — the release handler and the exchange's answer — must take
+the tracker off the list *before* running the completion callback, because that
+callback completes local clients and a client may fence again over the same
+participants the instant it returns. This closes the case where the next fence
+is started by a client of this daemon, or by a daemon downstream of it (whose
+release necessarily passed through here first). It cannot close the lateral
+case, where the release has not arrived at all yet.
+
+**A generation on the signature.** A ``uint32`` carried on the wire ahead of
+the participants and part of the tracker key, so fence *k* and fence *k+1* over
+one participant set are different collectives. It requires **no agreement
+protocol**: every participant takes part in every fence over a set, and two
+identical fences may never be in flight at once, so the fences over a signature
+are strictly ordered and the *k*-th is the *k*-th everywhere. Each daemon
+derives the same number by counting what it has retired.
+
+The one assumption is that the set of daemons hosting a signature's procs does
+not change mid-sequence. A proc **relocated onto a daemon that never hosted one
+of that job** breaks it: that daemon has counted nothing and would stamp 0
+while everyone else is at *k*. The launch that places a restarted proc carries
+``PRTE_JOB_FLAG_RESTART``, so such a daemon switches from deriving a generation
+to **learning** one — taking it from the tracker an arriving contribution has
+already built. A relocated proc is by definition the one that just came back,
+so its partners are already running and already sending to it, and today a proc
+is only relocated onto a new daemon after a daemon failure.
+
+The corner left open is a newcomer that enters the fence before any
+contribution reaches it. Closing it needs the newcomer to **query** the
+surviving participants for the current generation of that signature, on the
+relocation path only. That is deliberately not built while it is unreachable —
+an unused protocol is an untested one — and the verbose message *"relocated
+participants but no contribution to learn a generation from"* is the marker
+that it has become reachable. A DVM-wide generational counter is the wrong
+answer: agreeing one costs a collective of its own, which is precisely what
+deriving it locally avoids.
+
 Verification
 ------------
 
