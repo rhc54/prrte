@@ -475,6 +475,22 @@ ends it with `PMIX_ERR_LOST_CONNECTION`. Note the difference from a group
 construct, which *can* complete on survivors when asked: a fence has no
 equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
 
+### A generation that is behind ours is refused, not built
+
+The generation is part of the tracker key, so a contribution for a fence we
+have already finished matches nothing — and `get_tracker()` would then build a
+tracker for a collective that is over, which nothing will ever complete or
+delete. `fence_generation_is_stale()` catches that on both receive paths,
+before a tracker can be made. A generation *ahead* of ours is not stale: that
+is the early-arrival case, and building its tracker is the right answer.
+
+Slurm's PMI2 fence does the same thing with its `kvs_seq` and treats the
+mismatch as **fatal** (`error(); goto out;` upward, kill the step downward). It
+can afford that because its rollup has no lateral traffic to arrive out of
+turn; ours does, so a mismatch here is a quiet drop with a diagnostic naming
+the sender and both generations. Worth knowing that the two implementations
+agree on the mechanism and differ only on the severity, and why.
+
 ### Learning a generation after a relocation
 
 The generation is derived by **counting** the fences over a signature this

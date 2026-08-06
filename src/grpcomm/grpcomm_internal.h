@@ -497,6 +497,11 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
 PRTE_EXPORT extern
 void prte_grpcomm_fence_fault_handler(const prte_rml_recovery_status_t* status);
 
+/* Retire a generation for this signature without running a fence, leaving the
+ * state a completed fence would - which is what makes the generation before it
+ * stale. Exported so the unit test can drive it. */
+PRTE_EXPORT void prte_grpcomm_fence_note_retired(prte_grpcomm_fence_signature_t *sig);
+
 /* Find the tracker for this fence signature, optionally creating it. A new
  * tracker resolves the signature to its participating daemons and sizes the
  * rollup accordingly, and comes back NULL - with nothing left on the tracker
