@@ -44,6 +44,8 @@ prte_grpcomm_globals_t prte_grpcomm_globals = {
     .output = -1,
     .context_id = UINT32_MAX,
     .fence_ops = PMIX_LIST_STATIC_INIT,
+    .fence_gens = PMIX_LIST_STATIC_INIT,
+    .relocated_nspaces = PMIX_LIST_STATIC_INIT,
     .group_ops = PMIX_LIST_STATIC_INIT
 };
 
@@ -219,6 +221,8 @@ int prte_grpcomm_init(void)
     PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops,
                    prte_grpcomm_xcast_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_gens, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.relocated_nspaces, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
 
@@ -260,6 +264,8 @@ void prte_grpcomm_finalize(void)
 {
     PMIX_DESTRUCT(&prte_grpcomm_globals.xcast_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_gens);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.relocated_nspaces);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
     PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
 

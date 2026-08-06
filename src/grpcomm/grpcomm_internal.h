@@ -75,6 +75,14 @@ typedef struct {
     prte_grpcomm_xcast_t xcast_ops;
     // track ongoing fence operations - list of prte_grpcomm_fence_t
     pmix_list_t fence_ops;
+    // Namespaces whose procs reached this daemon by restart - list of
+    // relocated_nspace_t, defined in grpcomm_fence.c. A generation over such a
+    // set has to be learned rather than counted; see the commentary there.
+    pmix_list_t relocated_nspaces;
+    // How many fences over each participant set have been retired here - list
+    // of fence_gen_t, defined in grpcomm_fence.c. This is what supplies the
+    // `generation` on a fence signature; see the commentary there.
+    pmix_list_t fence_gens;
     // track ongoiong group operations - list of prte_grpcomm_group_t
     pmix_list_t group_ops;
     // A short memory of group operations we have already released - list of
@@ -217,6 +225,23 @@ typedef struct {
     pmix_object_t super;
     pmix_proc_t *signature;
     size_t sz;
+    /* Which fence over these participants this is: the count of fences over
+     * this signature that have already been retired here. The participant list
+     * alone does not identify a fence - a job fences over the same procs again
+     * and again - and the fences are not separated in time on the daemons: one
+     * ends at a different instant on each of them, and an exchange's messages
+     * do not travel the route the release does, so a partner that finished
+     * first legally sends the next fence's traffic to a daemon still working
+     * on this one. Without this the two are indistinguishable, and the next
+     * fence's contribution is either dropped (a hang) or, between two
+     * consecutive allgathers, stored into this one's slots (a wrong answer).
+     *
+     * It needs no agreement protocol. Every participant takes part in every
+     * fence over the set, and two identical fences may never be in flight at
+     * once, so the fences over a signature are strictly ordered and the k-th
+     * one is the k-th on every daemon by construction. Each daemon therefore
+     * derives the same number by counting locally. */
+    uint32_t generation;
 } prte_grpcomm_fence_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_fence_signature_t);
 
@@ -259,6 +284,28 @@ typedef struct {
     size_t ndmns;
     /* number of buckets expected */
     size_t nexpected;
+    /* True when the participant set could not be worked out yet because this
+     * daemon does not know the job the signature names.
+     *
+     * A daemon relays the launch broadcast to its children before it acts on
+     * its own copy, so a child can launch its procs, have them fence, and roll
+     * the contribution up to us before we have built that job - at which point
+     * create_dmns() has no map to derive the participating daemons from. The
+     * contribution is real and nothing will ever re-send it, so the tracker is
+     * kept and left unsized rather than destroyed: contributions merge into
+     * the bucket as usual (the subtree accounting is routing-tree based and
+     * needs no job), and prte_grpcomm_fence_resolve_pending() sizes it once
+     * the job is built.
+     *
+     * check_complete() must refuse to converge while this is set - an unsized
+     * rollup expects nothing, so it would otherwise answer at once with data
+     * it never gathered, which is the hazard get_tracker() used to avoid by
+     * throwing the tracker away.
+     *
+     * Nothing predicts which fence arrives first: the tracker is built from
+     * whatever signature turns up, so an early fence over some arbitrary
+     * subset simply gets its own tracker and is resolved independently. */
+    bool unresolved;
     /* number reported in */
     size_t nreported;
     // Which child subtrees have reported, keyed the same way the group

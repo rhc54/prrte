@@ -52,6 +52,49 @@ static void check_complete(prte_grpcomm_fence_t *coll);
 static void relcb(void *cbdata);
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st);
 static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body);
+static uint32_t fence_generation(pmix_proc_t *procs, size_t sz);
+static uint32_t fence_generation_for_new_fence(prte_grpcomm_fence_signature_t *sig);
+
+/* A namespace whose procs arrived here by restart.
+ *
+ * The generation is derived by counting the fences over a signature this
+ * daemon has retired, which is right only if it took part in all of them. A
+ * proc relocated onto a daemon that never hosted one of that job breaks
+ * exactly that: its clients enter fence k while this daemon has counted none,
+ * so it would stamp 0 and disagree with everybody.
+ *
+ * A daemon can see this happening - the launch that places a restarted proc
+ * carries PRTE_JOB_FLAG_RESTART - so rather than derive a number it cannot
+ * know, it LEARNS one: the first fence over such a signature takes its
+ * generation from the tracker an arriving contribution has already built.
+ * That covers the case in practice, because a relocated proc is by definition
+ * the one that just came back and its partners are already running and already
+ * sending to it. After that first fence the memo is in step and counting
+ * resumes normally.
+ *
+ * The corner it does not cover is a newcomer that enters the fence before any
+ * contribution reaches it; see "Learning a generation after a relocation" in
+ * AGENTS.md for how that would be closed if it ever becomes reachable. Today
+ * a proc is only relocated onto a new daemon after a daemon failure. */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_nspace_t nspace;
+} relocated_nspace_t;
+PMIX_CLASS_DECLARATION(relocated_nspace_t);
+static void fence_generation_advance(prte_grpcomm_fence_signature_t *sig);
+
+/* How many fences over one participant set have been retired here.
+ *
+ * This is the whole of the generation mechanism: a fence's generation is the
+ * value found here when it starts, and retiring a fence bumps it. No exchange
+ * is involved - see the commentary on prte_grpcomm_fence_signature_t. */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_proc_t *procs;
+    size_t sz;
+    uint32_t next_gen;
+} fence_gen_t;
+PMIX_CLASS_DECLARATION(fence_gen_t);
 
 
 /* How a converged fence is answered.
@@ -266,6 +309,179 @@ static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body
  * daemon spots it and is fatal to the whole collective, so that path calls it
  * from wherever it is noticed; the broadcast reaches the controller by the
  * ordinary relay either way. */
+static void fence_gen_con(fence_gen_t *p)
+{
+    p->procs = NULL;
+    p->sz = 0;
+    p->next_gen = 0;
+}
+static void fence_gen_des(fence_gen_t *p)
+{
+    if (NULL != p->procs) {
+        PMIX_PROC_FREE(p->procs, p->sz);
+    }
+}
+PMIX_CLASS_INSTANCE(fence_gen_t, pmix_list_item_t,
+                    fence_gen_con, fence_gen_des);
+
+/* Find the memo for a participant set, or NULL. Matched exactly the way
+ * get_tracker() matches a signature - byte-for-byte over the proc array - so
+ * the two cannot disagree about what "the same participants" means. */
+static fence_gen_t* fence_gen_find(pmix_proc_t *procs, size_t sz)
+{
+    fence_gen_t *g;
+
+    PMIX_LIST_FOREACH(g, &prte_grpcomm_globals.fence_gens, fence_gen_t) {
+        if (g->sz == sz && 0 == memcmp(g->procs, procs, sz * sizeof(pmix_proc_t))) {
+            return g;
+        }
+    }
+    return NULL;
+}
+
+/* Which fence over these participants the next one to start here will be. */
+static uint32_t fence_generation(pmix_proc_t *procs, size_t sz)
+{
+    fence_gen_t *g;
+
+    if (NULL == procs || 0 == sz) {
+        return 0;
+    }
+    g = fence_gen_find(procs, sz);
+    return (NULL == g) ? 0 : g->next_gen;
+}
+
+/* Retiring a fence makes the next one over the same participants a new
+ * generation. Also the point at which memos for jobs that have since gone away
+ * are dropped - the list would otherwise hold one entry per participant set
+ * the DVM has ever fenced over. A fence over the daemon job is never dropped:
+ * that "job" outlives everything. */
+static void fence_generation_advance(prte_grpcomm_fence_signature_t *sig)
+{
+    fence_gen_t *g, *nxt;
+
+    if (NULL == sig || NULL == sig->signature || 0 == sig->sz) {
+        return;
+    }
+    g = fence_gen_find(sig->signature, sig->sz);
+    if (NULL == g) {
+        g = PMIX_NEW(fence_gen_t);
+        if (NULL == g) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return;
+        }
+        g->sz = sig->sz;
+        PMIX_PROC_CREATE(g->procs, g->sz);
+        memcpy(g->procs, sig->signature, g->sz * sizeof(pmix_proc_t));
+        pmix_list_append(&prte_grpcomm_globals.fence_gens, &g->super);
+    }
+    g->next_gen = sig->generation + 1;
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm fence generation %u retired - next is %u",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (unsigned) sig->generation, (unsigned) g->next_gen));
+
+    PMIX_LIST_FOREACH_SAFE(g, nxt, &prte_grpcomm_globals.fence_gens, fence_gen_t) {
+        if (NULL == g->procs || 0 == g->sz) {
+            continue;
+        }
+        if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, g->procs[0].nspace)) {
+            continue;
+        }
+        if (NULL == prte_get_job_data_object(g->procs[0].nspace)) {
+            pmix_list_remove_item(&prte_grpcomm_globals.fence_gens, &g->super);
+            PMIX_RELEASE(g);
+        }
+    }
+}
+
+static void reloc_con(relocated_nspace_t *p)
+{
+    PMIX_LOAD_NSPACE(p->nspace, NULL);
+}
+PMIX_CLASS_INSTANCE(relocated_nspace_t, pmix_list_item_t, reloc_con, NULL);
+
+void prte_grpcomm_fence_note_relocation(const pmix_nspace_t nspace)
+{
+    relocated_nspace_t *r;
+
+    PMIX_LIST_FOREACH(r, &prte_grpcomm_globals.relocated_nspaces, relocated_nspace_t) {
+        if (PMIX_CHECK_NSPACE(r->nspace, nspace)) {
+            return;
+        }
+    }
+    r = PMIX_NEW(relocated_nspace_t);
+    if (NULL == r) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return;
+    }
+    PMIX_LOAD_NSPACE(r->nspace, nspace);
+    pmix_list_append(&prte_grpcomm_globals.relocated_nspaces, &r->super);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm fence: procs of %s arrived by restart - "
+                         "generations over them will be learned, not counted",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nspace));
+}
+
+/* Does this signature name a job whose procs reached us by restart? */
+static bool sig_has_relocated(prte_grpcomm_fence_signature_t *sig)
+{
+    relocated_nspace_t *r;
+    size_t n;
+
+    if (pmix_list_is_empty(&prte_grpcomm_globals.relocated_nspaces)) {
+        return false;
+    }
+    for (n = 0; n < sig->sz; n++) {
+        PMIX_LIST_FOREACH(r, &prte_grpcomm_globals.relocated_nspaces, relocated_nspace_t) {
+            if (PMIX_CHECK_NSPACE(r->nspace, sig->signature[n].nspace)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* The generation to stamp on a fence our own client is starting.
+ *
+ * Normally the count of what we have retired. But if these participants
+ * include a job whose procs reached us by restart, and we have retired nothing
+ * over this exact set, then counting would answer 0 while everyone else is
+ * further on - so take the answer from a tracker an arriving contribution has
+ * already built for the same participants instead. */
+static uint32_t fence_generation_for_new_fence(prte_grpcomm_fence_signature_t *sig)
+{
+    prte_grpcomm_fence_t *coll;
+
+    if (NULL == sig->signature || 0 == sig->sz) {
+        return 0;
+    }
+    if (NULL == fence_gen_find(sig->signature, sig->sz) && sig_has_relocated(sig)) {
+        PMIX_LIST_FOREACH(coll, &prte_grpcomm_globals.fence_ops, prte_grpcomm_fence_t) {
+            if (sig->sz == coll->sig->sz &&
+                0 == memcmp(sig->signature, coll->sig->signature,
+                            sig->sz * sizeof(pmix_proc_t))) {
+                PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                                     "%s grpcomm fence: adopting generation %u after "
+                                     "a relocation rather than counting from zero",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     (unsigned) coll->sig->generation));
+                return coll->sig->generation;
+            }
+        }
+        /* Nothing has reached us yet, so there is nothing to learn from. This
+         * is the corner described on relocated_nspace_t - closing it needs a
+         * query, which is deliberately not built until it is reachable. */
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm fence: relocated participants but no "
+                             "contribution to learn a generation from",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    }
+    return fence_generation(sig->signature, sig->sz);
+}
+
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
 {
     pmix_data_buffer_t *reply;
@@ -322,6 +538,7 @@ void prte_grpcomm_fence_restart(void)
     prte_grpcomm_fence_t *coll, *nxt;
     pmix_data_buffer_t *framed;
     int rc;
+
 
     PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_grpcomm_globals.fence_ops,
                            prte_grpcomm_fence_t) {
@@ -522,6 +739,13 @@ static void fence(int sd, short args, void *cbdata)
         PMIX_PROC_CREATE(sig.signature, sig.sz);
         memcpy(sig.signature, cd->procs, sig.sz * sizeof(pmix_proc_t));
     }
+    /* Which fence over these participants this is. Our clients cannot have
+     * skipped one - every participant takes part in every fence over the set -
+     * so counting what we have retired gives the same answer everyone else
+     * will reach for the same fence. A partner that is a step ahead has
+     * already sent us traffic stamped with this number, and get_tracker()
+     * will have built that fence's own tracker for it. */
+    sig.generation = fence_generation_for_new_fence(&sig);
 
     /* retrieve an existing tracker, create it if not
      * already found. The fence module is responsible
@@ -746,6 +970,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         PMIX_RELEASE(sig);
         return;
     }
+
     PMIX_RELEASE(sig);
 
     /* A fence has no originator to decide how it travels, so every
@@ -925,6 +1150,12 @@ static void check_complete(prte_grpcomm_fence_t *coll)
     const fence_movement_t *mv;
 
     if (coll->converged || coll->aborting) {
+        return;
+    }
+    /* Not yet sized: we do not know this job, so we do not know how many
+     * contributions to expect. An unsized rollup expects nothing and would
+     * answer at once with data it never gathered. */
+    if (coll->unresolved) {
         return;
     }
 
@@ -1445,6 +1676,12 @@ static void rd_allgather_answer(prte_grpcomm_fence_t *coll)
                          "%s grpcomm:fence:allgather complete with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) total));
 
+    /* Off the list before anything below can let the next fence begin - the
+     * same rule the release path follows, and for the same reason: the
+     * callback completes our clients, and a client may fence again over these
+     * participants the instant it returns. */
+    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
+
     if (NULL != coll->cbfunc) {
         coll->cbfunc(coll->status, out.bytes, out.size, coll->cbdata,
                      relcb, out.bytes);
@@ -1453,7 +1690,8 @@ static void rd_allgather_answer(prte_grpcomm_fence_t *coll)
          * participant with no clients of our own */
         PMIX_BYTE_OBJECT_DESTRUCT(&out);
     }
-    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
+    /* the next fence over these participants is a new generation */
+    fence_generation_advance(coll->sig);
     PMIX_RELEASE(coll);
 }
 
@@ -1503,11 +1741,12 @@ void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
      * again. The tracker is what holds them until our own contribution
      * arrives and starts our half of the exchange. */
     coll = get_tracker(sig, true);
-    PMIX_RELEASE(sig);
     if (NULL == coll) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PMIX_RELEASE(sig);
         return;
     }
+    PMIX_RELEASE(sig);
     if (coll->converged || coll->aborting) {
         return;
     }
@@ -1609,6 +1848,28 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
         return;
     }
 
+    /* Retire the tracker NOW - before anything below can let another fence of
+     * the same participants begin.
+     *
+     * This fence is over the moment its release arrives; everything that
+     * follows is delivery. And delivery is precisely what starts the next
+     * one: the callback below completes our local clients' PMIx_Fence, and a
+     * client may call the next fence over the same procs the instant it
+     * returns. Two identical fences may not run concurrently, so that next
+     * fence is unambiguously a new collective - but while this tracker is
+     * still on the list, get_tracker() matches on the participant list alone
+     * and hands it back. The new fence then lands on a converged tracker that
+     * is about to be freed, and its contribution is lost with it: every
+     * daemon waits forever for something that was already delivered.
+     *
+     * Off the list, the same lookup finds nothing and builds the fresh
+     * tracker the new fence deserves. Note this must happen before the
+     * release is passed downward as well, for the same reason applied to a
+     * daemon below us - which the xcast layer already does ahead of local
+     * delivery. The tracker itself stays alive until the end of this
+     * function; we hold the only remaining reference. */
+    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
+
     /* unload the buffer. An aborted fence carries no gathered data, so an
      * empty or unreadable payload is expected there - do not let that
      * overwrite the status the controller sent, which is the whole message. */
@@ -1629,7 +1890,8 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
          * callback above was handed it. */
         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
     }
-    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
+    /* the next fence over these participants is a new generation */
+    fence_generation_advance(sig);
     PMIX_RELEASE(coll);
     PMIX_RELEASE(sig);
 }
@@ -1641,7 +1903,13 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
 
     /* search the existing tracker list to see if this already exists */
     PMIX_LIST_FOREACH(coll, &prte_grpcomm_globals.fence_ops, prte_grpcomm_fence_t) {
-        if (sig->sz == coll->sig->sz) {
+        /* The generation is part of the key, not a detail of it: a job fences
+         * over the same participants repeatedly, and consecutive fences DO
+         * overlap on a daemon (one ends at a different instant on each, and
+         * the exchange does not travel the release's route). Matching on the
+         * participant list alone hands the next fence's contribution to the
+         * one before it. */
+        if (sig->sz == coll->sig->sz && sig->generation == coll->sig->generation) {
             // must match proc signature
             if (0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
                 PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
@@ -1664,6 +1932,7 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
     // we have to know the participating procs
     coll->sig = PMIX_NEW(prte_grpcomm_fence_signature_t);
     coll->sig->sz = sig->sz;
+    coll->sig->generation = sig->generation;
     if (0 < coll->sig->sz) {
         PMIX_PROC_CREATE(coll->sig->signature, coll->sig->sz);
         memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
@@ -1671,12 +1940,29 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
     pmix_list_append(&prte_grpcomm_globals.fence_ops, &coll->super);
 
     /* now get the daemons involved */
-    if (PRTE_SUCCESS != (rc = create_dmns(sig, &coll->dmns, &coll->ndmns))) {
+    rc = create_dmns(sig, &coll->dmns, &coll->ndmns);
+    if (PRTE_ERR_NOT_FOUND == rc) {
+        /* We do not know this job yet - it is being launched, and our children
+         * were handed the launch broadcast before we acted on our own copy, so
+         * a contribution can beat the job here. That is not a bad message and
+         * nobody will send it again, so keep the tracker and leave it unsized
+         * until prte_grpcomm_fence_resolve_pending() can work the participants
+         * out. See the `unresolved` commentary in grpcomm_internal.h. */
+        coll->unresolved = true;
+        coll->dmns = NULL;
+        coll->ndmns = 0;
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:fence: job not known yet - tracker held unsized",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        return coll;
+    }
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        /* a tracker with no daemon set can never be completed, and leaving it
-         * on the list is worse than losing it: the next fence of the same
-         * signature would find this one, see a rollup that expects nothing,
-         * and answer with data it never gathered */
+        /* The signature itself is unreadable, so no later event can rescue
+         * this one. A tracker with no daemon set can never be completed, and
+         * leaving it on the list is worse than losing it: the next fence of
+         * the same signature would find this one, see a rollup that expects
+         * nothing, and answer with data it never gathered. */
         pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
         PMIX_RELEASE(coll);
         return NULL;
@@ -1686,6 +1972,44 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_fence_signature_t *sig, bo
     set_nexpected(coll);
 
     return coll;
+}
+
+/* Size any tracker that was waiting on a job this daemon had not built yet,
+ * and re-test it - the contributions it has been accumulating may already be
+ * everything it needs.
+ *
+ * Called when a job has been constructed locally, which is the only event that
+ * can change the answer. A tracker whose signature names more than one job
+ * stays unresolved until every one of them is known, which falls out of
+ * create_dmns() being retried whole. */
+void prte_grpcomm_fence_resolve_pending(void)
+{
+    prte_grpcomm_fence_t *coll, *nxt;
+    int rc;
+
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_grpcomm_globals.fence_ops,
+                           prte_grpcomm_fence_t) {
+        if (!coll->unresolved) {
+            continue;
+        }
+        rc = create_dmns(coll->sig, &coll->dmns, &coll->ndmns);
+        if (PRTE_SUCCESS != rc) {
+            /* still not knowable - a later job may yet supply it */
+            coll->dmns = NULL;
+            coll->ndmns = 0;
+            continue;
+        }
+        coll->unresolved = false;
+        set_nexpected(coll);
+
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                             "%s grpcomm:fence: held tracker resolved - "
+                             "nexpected %d nrep %d",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (int) coll->nexpected, (int) coll->nreported));
+
+        check_complete(coll);
+    }
 }
 
 /* Same, for a caller outside this file. Exported only so the unit test can
@@ -1870,6 +2194,15 @@ static int fence_sig_pack(pmix_data_buffer_t *bkt,
 {
     pmix_status_t rc;
 
+    /* which fence over these participants this is - see the signature's own
+     * commentary. Packed ahead of the procs so a receiver has it before it
+     * can look for a tracker. */
+    rc = PMIx_Data_pack(NULL, bkt, &sig->generation, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
     // always send the participating procs
     rc = PMIx_Data_pack(NULL, bkt, &sig->sz, 1, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
@@ -1895,6 +2228,14 @@ static int fence_sig_unpack(pmix_data_buffer_t *buffer,
     prte_grpcomm_fence_signature_t *s;
 
     s = PMIX_NEW(prte_grpcomm_fence_signature_t);
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->generation, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
 
     // unpack the participating procs
     cnt = 1;

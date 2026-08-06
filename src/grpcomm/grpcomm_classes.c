@@ -57,6 +57,7 @@ static void scon(prte_grpcomm_fence_signature_t *p)
 {
     p->signature = NULL;
     p->sz = 0;
+    p->generation = 0;
 }
 static void sdes(prte_grpcomm_fence_signature_t *p)
 {
@@ -115,6 +116,7 @@ static void ccon(prte_grpcomm_fence_t *p)
     p->dmns = NULL;
     p->ndmns = 0;
     p->nexpected = 0;
+    p->unresolved = false;
     p->nreported = 0;
     PMIX_CONSTRUCT(&p->reported_slots, pmix_bitmap_t);
     pmix_bitmap_init(&p->reported_slots, 1);
