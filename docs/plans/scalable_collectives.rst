@@ -1002,12 +1002,19 @@ and those are precisely the transports that publish a large per-rank endpoint
 blob; the regime where the ring wins is one this build cannot enter. And it is
 16-32 ranks, where N**2 fetching is still small in absolute terms.
 
-The conclusion to carry forward is therefore not "the ring share is bad" but
-**the per-rank modex size is the whole variable**, and no movement should be
-chosen without it. That is the strongest argument yet for leaving ``neighbor``
-opt-in rather than wiring it into ``auto`` - and for treating
-``PMIX_COLLECT_DATA`` as too coarse a discriminator, since it says whether the
-caller wants the data and nothing about how much of it there is.
+The conclusion to draw from *this* section alone would be that the per-rank
+modex size is the whole variable and no movement should be chosen without it.
+The sweep in the next section but one shows that is wrong - most of the ring's
+advantage is the release traversal rather than the bytes, and it is present at
+64 bytes a rank - so do not carry this paragraph forward on its own.
+
+What does survive is the reason ``neighbor`` stays opt-in, and it is a
+**semantic** reason rather than a measurement one: a caller that set
+``PMIX_COLLECT_DATA`` asked for the data, and this movement does not deliver
+it. That is legal - ``PMIx_Get`` falls back to direct modex, which is what the
+FAR half of ``scaletest --verify`` exists to prove - but it is a
+reinterpretation of a directive, and that is a policy decision rather than a
+tuning one.
 
 And one framing correction. The all-to-all row above is **not** the workload to
 design against. Very few real applications connect every pair of ranks, and
@@ -1113,10 +1120,20 @@ Caveats, stated rather than buried:
 
 * **Forcing the movement also applies it to barriers**, and there it costs a
   little: 1039us to 1298us at 16 nodes, the price of two extra one-hop
-  messages carrying a barrier's eight bytes. A deployment wants the ring for
-  the modex and the rollup for barriers, which is an ``auto`` rule, not a
-  forced one - and another reason ``auto`` needs a better discriminator than
-  ``PMIX_COLLECT_DATA``.
+  messages carrying a barrier's eight bytes. This is an artifact of the
+  measurement, **not** something ``auto`` would inherit: a barrier carries
+  ``PMIX_COLLECT_DATA`` false and ``auto`` therefore gives it the rollup, so
+  the ring never sees one. Do not read this row as an argument about
+  ``auto``; an earlier draft of this document did, and was wrong.
+
+  ``PMIX_COLLECT_DATA`` is in fact a **sufficient** discriminator for the
+  barrier-versus-modex choice, and it is the only trustworthy one: the obvious
+  substitute, "is ``ndata`` zero", is not, because a bare barrier arrives with
+  eight bytes. Nor is a *size* threshold needed on the modex side - the sweep
+  above shows the ring ahead at 64 bytes a rank, so there is no crossover for
+  a threshold to find. Open MPI bears this out: its post-modex hard barrier
+  loads the flag false explicitly (``ompi_mpi_init.c:638``) and
+  ``MPI_Finalize``'s fence passes no info array at all, which reads as false.
 * **The 32-node row exists only for the ring.** The 32-node DVM failed to
   start at radix 2 during the rollup pass - a known flake of this host, not
   anything to do with the movement - so there is no pair to compare and it is
