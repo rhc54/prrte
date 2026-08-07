@@ -1149,6 +1149,217 @@ is legal (``PMIx_Get`` falls back to direct modex, which is why FAR verifies)
 but it is a semantic change, so it stays opt-in until it has been measured
 against a real MPI application rather than against a synthetic client.
 
+Piece 6 — the launch message, and what a client asks about a remote peer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same bet as Piece 5, arriving from the other end.
+
+The launch message is the other large thing the DVM moves as a matter of
+course, and it has just been made much smaller (PRRTE #2628): the job's
+placement now travels as a node map plus one proc map per app rather than a
+record per process, which took it from ~46 to ~13 bytes a proc - 5.8 MB to
+1.6 MB at 131,072 procs. What is left divides cleanly in two, and only one
+half is broadcast-shaped:
+
+* **The job-level fields and the maps.** O(nodes), compressed, and genuinely
+  identical for every daemon - rank-to-node is what any daemon answers a
+  ``PMIx_Get`` about any rank with. Small, latency-bound, and a broadcast is
+  the right thing for it.
+* **The per-proc residual array** - node rank, cpuset, state, attributes.
+  O(total procs), and now the only part that scales with the job. But a
+  daemon needs a proc's cpuset and node rank in order to *fork* it, which is
+  only true of the procs it hosts.
+
+**The mechanism question is already settled, and it is not the interesting
+one.** The launch message is on ``scatter_allgather`` today, selected by tag
+(``bulk_tag_prefers_bulk()`` names exactly ``PRTE_RML_TAG_DAEMON_LAUNCH``),
+and that scatter goes **down the routing tree**. So reaching every daemon
+costs ``d`` hops whatever the placement - a job that puts at least one proc
+on every node does not defeat it, because what changes with placement is the
+volume per edge, not the number of hops. The question is whether the
+**allgather half** is needed at all.
+
+It exists for exactly one reason: every daemon must end up holding the
+*complete* payload, because ``prte_pmix_server_register_nspace`` publishes a
+``PMIX_PROC_INFO_ARRAY`` for every proc on every daemon so that any daemon
+can answer a ``Get`` about any rank. That requirement had never been checked
+against what a client actually asks.
+
+What Open MPI asks about a proc that is not on this node
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Scanned across all of ``ompi/``, ``opal/`` and ``oshmem/`` in the Open MPI
+``main`` tree, excluding ``3rd-party/``, for any ``PMIx_Get`` of a
+``PMIX_``-prefixed key naming a proc that can be off-node. Reserved keys
+only - user modex keys (``OMPI_ARCH``, the BTL endpoint blobs) are the
+direct-modex traffic that already works this way and are not in question.
+
+**Non-optional, and genuinely remote: exactly one.**
+
+==============================================================  ==================
+Site                                                            Key
+==============================================================  ==================
+``ompi/mca/topo/treematch/topo_treematch_dist_graph_create.c``   ``PMIX_NODEID``
+==============================================================  ==================
+
+It asks for every rank in the communicator, so it *would* issue a direct
+modex per peer if the answer were not held locally.
+
+**Optional, so they cannot issue one at all.** ``PMIX_OPTIONAL`` tells the
+client library to answer from local data or fail; it never goes to the
+server. That covers ``PMIX_HOSTNAME`` (``opal_get_proc_hostname()`` and
+``pml_base_select``) and the four ``PMIX_LOCALITY`` sites in
+``ompi/proc/proc.c`` and ``ompi/communicator/comm.c``.
+
+**And ``PMIX_LOCALITY`` never crosses the wire in either direction.** Open
+MPI *computes* it (``ompi/runtime/ompi_rte.c:895``) from each local peer's
+``PMIX_LOCALITY_STRING`` and stores it client-side with
+``PMIx_Store_internal``. A get naming a remote proc misses and falls back to
+``OPAL_PROC_NON_LOCAL``, which is the right answer anyway. Nothing in PMIx
+stores that key and nothing in PRRTE publishes it.
+
+**Sites that look remote and are not**, which is most of them:
+
+* ``btl/sm``'s ``PMIX_LOCAL_RANK`` - ``btl/sm`` only ever handles procs on
+  this node.
+* ``common_ofi``'s ``PMIX_LOCALITY_STRING`` and ``PMIX_PACKAGE_RANK`` - it
+  walks the ``PMIX_LOCAL_PEERS`` list, so local by construction.
+* The ~20 gets in ``ompi/runtime/ompi_rte.c``, and everything in
+  ``opal/mca/hwloc/base/hwloc_base_util.c``, ``comm_init.c`` and
+  ``btl/smcuda`` - all either self or a wildcard rank, i.e. job-level.
+* ``ompi/dpm/dpm.c`` asks ``PMIX_LOCAL_PEERS`` and
+  ``PMIX_LOCALITY_STRING`` ``IMMEDIATE``, but about a *connected* namespace -
+  a different job, which arrived by connect/accept rather than by a launch
+  message.
+
+The answers come from the maps, not from the per-proc array
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Every key on that list is derived by PMIx from the node map and the proc
+map. ``pmix_gds_hash_store_map()`` (``src/mca/gds/hash/gds_utils.c``) walks
+the two together and stores, for each rank:
+
+* ``PMIX_HOSTNAME`` - the node the rank appeared under;
+* ``PMIX_NODEID`` - that node's index in the map;
+* ``PMIX_LOCAL_RANK`` - ``m``, the rank's position in its node's list;
+* ``PMIX_NODE_RANK`` - ``m`` as well.
+
+That third one is worth pausing on: it is the **same derivation** PRRTE's own
+``prte_job_unpack`` now performs, arrived at independently from
+``compute_local_rank()``. PMIx has been computing local rank from the proc
+map all along.
+
+Two riders, both material:
+
+* **It is the fallback.** The whole block is gated on
+  ``!(PMIX_HASH_PROC_DATA & flags)`` - it runs only when the host did *not*
+  supply a per-proc array. PRRTE does supply one, so PRRTE's values win
+  today. That is the point rather than an obstacle: if PRRTE stopped shipping
+  *remote* procs' records, PMIx would derive them from the maps and every get
+  above would still be answered locally, with no direct modex.
+* **PMIx's node-rank fallback is wrong, and says so.** It sets
+  ``node_rank = m`` with the comment *"for now, we assume only the one job is
+  running"*, which breaks when two jobs share a node. That is exactly the one
+  field PRRTE found it could not derive either. The two analyses agree on
+  which field is the exception.
+
+What this says about the movement
+'''''''''''''''''''''''''''''''''
+
+**Nothing in Open MPI asks a remote proc for ``PMIX_CPUSET``, and nothing
+asks a remote proc for ``PMIX_NODE_RANK``** - the only node-rank get is
+``ompi_rte.c:631``, about self. Those two are the residual array. On this
+evidence the allgather half is moving data no MPI process asks for about a
+remote peer.
+
+So the shape to build is **scatter the residuals, broadcast the maps**:
+
+=====================  ==========================  ============================
+Movement               Total bytes on the wire     Per-daemon inbound
+=====================  ==========================  ============================
+``tree_whole``         ``M*(N-1)``                 ``M``
+``scatter_allgather``  ``~N*M``, lateral           ``M``
+scatter alone          ``M*d``                     ``M * subtree/N``
+=====================  ==========================  ============================
+
+At ``N`` = 4096 and radix 64 (``d`` = 2) that is ``2M`` against ``4095M``,
+and a leaf takes ``M/4096`` rather than ``M``. Placement changes the
+distribution of slice sizes, not whether the win exists: uniform spread -
+every daemon hosting procs - is the *worst* case for it and still gives each
+daemon ``M/N`` instead of ``M``, while a concentrated job (``--host node1``
+on a large DVM) is the best case and the one a broadcast handles worst.
+
+**It is a third movement, not a flag on the existing one.** Today chunk ``i``
+is an arbitrary ``1/N`` slice that participant ``i`` contributes back to the
+allgather. Here chunk ``i`` is *addressed to* daemon ``i`` - the sizes
+differ, and the reassemble-into-one-buffer indexing goes away. The contract
+changes from "one payload" to "a payload per destination". The framing is
+untouched: op-id assignment, the ACK rollup, the ``process_first`` set and
+the replay machinery are all movement-agnostic, and ``bulk_degrade()``'s "the
+controller always can re-send" still holds, since the controller holds every
+slice.
+
+A regression the shrink exposes on the way past
+'''''''''''''''''''''''''''''''''''''''''''''''
+
+The tag table's justification is that the launch message is the one large
+broadcast PRRTE makes routinely. At ~46 bytes a proc that was safe. At ~13 it
+is not, because the message is now small for most jobs. Measured on the
+current build against ``test-topo.xml``:
+
+=========  ================  =============
+Procs      Nodes             Launch msg
+=========  ================  =============
+1          1                 314 B
+4          4                 368 B
+256        16                4.0 KB
+16,384     1024              205 KB
+=========  ================  =============
+
+All of those take ``scatter_allgather`` on whatever size DVM they were
+submitted to, and the bulk movement has fixed costs the payload no longer
+covers: the participant rank list is stamped on the wire at four bytes a
+rank, which is **16 KB on a 4096-daemon DVM**. So a ``prun -n 1`` into a
+large persistent DVM wraps a 314-byte payload in 16 KB of scaffolding and
+runs ``log2(4096)`` = 12 lateral rounds, where ``tree_whole`` at radix 64 is
+two hops. That inversion exists today; the shrink did not create it, it moved
+far more jobs into the regime where it bites.
+
+The crossover is derivable rather than guessable - bulk wins when the tree's
+``r*M*beta`` fanout beats the exchange's extra ``log2(N)*alpha`` - but that
+expression embeds ``alpha`` and ``beta``, which are machine properties. So it
+is a **measurement**, not a table entry, and emphatically not a job for the
+``size`` escape hatch, which holds a number nobody has measured.
+
+If the scatter-only split lands, the question largely dissolves: what is left
+to broadcast is O(nodes) and belongs on ``tree_whole`` outright, and the bulk
+movement's remaining customer is ``filem``.
+
+Limits of this evidence
+'''''''''''''''''''''''
+
+Stated rather than buried, because the conclusion is only as good as the
+scan:
+
+* **It is Open MPI.** OpenSHMEM rides the same runtime layer
+  (``oshmem/proc/proc.c`` asks only a wildcard ``PMIX_LOCAL_PEERS``), but
+  other PMIx clients exist and were not scanned.
+* **The treematch ``PMIX_NODEID`` get is non-optional.** Under the maps it is
+  answered locally, but it is the one site where being wrong shows up as a
+  round trip per peer per communicator rather than as a fallback.
+* **"Nothing asks" is weaker than "the answer would be right."** If PRRTE
+  stops supplying ``PMIX_NODE_RANK`` for remote procs, a remote get falls
+  through to PMIx's one-job-per-node assumption and receives a *wrong* value
+  rather than nothing. Node rank is two bytes; if that matters, keep
+  broadcasting it on its own rather than relying on nobody asking.
+
+**This also answers the question Piece 5 was paused on**, from the client
+side rather than the fence side. The ring share bets that a daemon need not
+hold the whole modex because ``PMIx_Get`` falls back to direct modex; this
+scan says that for the *reserved* keys a client asks about a remote peer, no
+fallback is even needed - the maps already carry the answer. The two bets are
+the same bet, and one investigation serves both.
+
 Verification
 ------------
 
@@ -1212,6 +1423,13 @@ Open questions
    multi-node ordering case before it can be trusted.
 #. **Descriptor budget at scale** for ``log2 N`` lateral links per
    daemon. The ring movement (two links) is the fallback.
+#. **The scatter-only launch movement** described in Piece 6 is designed but
+   not built. The evidence says the allgather half carries data no client
+   asks for about a remote peer; what is not yet measured is the other half
+   of that section - whether small jobs on a large DVM are being hurt by the
+   bulk movement's fixed costs today. Both arms already exist behind
+   ``grpcomm_bcast_movement``, so an A/B across DVM size and job size is
+   cheap and should come before either change.
 #. **A cheaper win exists and should be measured alongside.** Much of the
    tree's cost is the ``d*r`` release fanout. A payload-aware radix for the
    release, or a chunked/pipelined ``xcast``, recovers a large fraction of the
