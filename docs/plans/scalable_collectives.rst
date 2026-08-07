@@ -1009,6 +1009,122 @@ opt-in rather than wiring it into ``auto`` - and for treating
 ``PMIX_COLLECT_DATA`` as too coarse a discriminator, since it says whether the
 caller wants the data and nothing about how much of it there is.
 
+And one framing correction. The all-to-all row above is **not** the workload to
+design against. Very few real applications connect every pair of ranks, and
+most transports could not carry that many connections if they tried - which is
+exactly why a nearest-neighbour assumption is a reasonable basis for a runtime
+to optimize on. Treat that row as the outer bound of the damage, not as the
+case to beat.
+
+How big is a real transport's blob?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The TCP figure above (82 bytes a rank) is the smallest thing Open MPI can
+publish, so it is worth reading the two transports that matter on real
+machines. Neither could be measured here - the containers have no fabric - so
+these are read out of the source, and the experiment that follows sweeps the
+range rather than trusting a single number.
+
+**OFI is tens of bytes, and fixed.** ``mtl/ofi`` publishes exactly one
+endpoint address: ``opal_common_ofi_fi_getname()`` calls ``fi_getname()`` and
+the result *is* the modex value (``mtl_ofi_component.c:1107``,
+``mtl_ofi_compat.h:24``). ``btl/ofi`` publishes a four-byte count plus one
+length-prefixed address per module (``btl_ofi_component.c:547``). The address
+sizes are provider constants: EFA is ``EFA_EP_ADDR_LEN`` - a 16-byte GID plus
+qpn, pad and qkey; tcp/sockets is ``FI_SOCKADDR``, i.e. a 16-byte
+``sockaddr_in``. So OFI sits in the same band as the TCP BTL, and it does not
+grow with anything.
+
+**UCX is the opposite, and is the interesting case.** ``pml/ucx`` publishes
+the entire ``ucp_worker`` address (``pml_ucx.c:100-130``) - and publishes it
+*twice*, once at ``PMIX_LOCAL`` with full flags and once at ``PMIX_GLOBAL``
+with ``UCP_WORKER_ADDRESS_FLAG_NET_ONLY``; only the second is what a remote
+peer fetches. Its size comes from ``ucp_address_packed_size()``
+(UCX ``src/ucp/wireup/address.c:422``):
+
+* a 1-2 byte header, plus an 8-byte worker UUID and an 8-byte client id when
+  those flags are set;
+* **per device**: md index, the device address and its length, optionally a
+  path count and a system-device byte. An IB device address is
+  ``uct_ib_address_size()`` - a base struct plus a 2-byte LID (plus an 8-byte
+  GUID and a 2- or 8-byte subnet prefix), or a full 16-byte ``ibv_gid`` on
+  RoCE;
+* **per transport lane on that device**: a 2-byte transport-name checksum, the
+  interface address and its length, a packed interface-attribute struct, and
+  ``ep_addr_len`` plus a lane byte for each lane.
+
+The property that matters: **it scales with devices times transports, not with
+job size**. A single-rail node with two or three network transports is in the
+low hundreds of bytes; multi-rail, or a worker that also carries GPU
+transports, reaches a kilobyte and beyond. That is one to two orders of
+magnitude above OFI, and it is per rank.
+
+So the range worth testing is roughly 64 bytes (OFI, TCP) to a few kilobytes
+(a fat UCX worker), and the next section sweeps exactly that.
+
+The neighbour exchange at transport-sized blobs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``scaletest --neighbors`` puts one key of the given size, fences, and then
+fetches **only** its left and right neighbour - the pattern the ring share
+exists for, and the one nearly every real application actually has. Swept
+across the transport range above, radix 2, one proc per node, medians of five
+iterations. COLLECT is the modex fence; ``data`` is COLLECT minus the barrier
+over the same tree, i.e. what the payload itself cost.
+
+=====  ========  ==========  ==========  ========  =========  =========
+N      B/rank    tree        neighbor    ratio     tree data  nbr data
+=====  ========  ==========  ==========  ========  =========  =========
+8      64        734         689         0.94      199        70
+8      256       847         825         0.97      389        147
+8      1024      865         721         0.83      377        128
+8      4096      1249        850         0.68      664        302
+16     64        1972        1336        0.68      933        38
+16     256       2070        1284        0.62      1150       202
+16     1024      2134        1362        0.64      1213       290
+16     4096      3226        1623        0.50      2375       548
+=====  ========  ==========  ==========  ========  =========  =========
+
+Three things fall out of this, and the first was a surprise.
+
+**The win does not come mainly from bytes.** At 16 nodes and 64 bytes a rank -
+OFI/TCP territory, 7 KB of modex in the entire job - the rollup still spends
+933us over a bare barrier, and the ring spends 38us. There is no bandwidth
+story there at all; what the rollup is paying for is the *release traversal*,
+a second trip down the tree carrying a payload. The ring has no release
+payload, so that term is simply absent. This is why the advantage does not
+disappear at small blobs, which is what the earlier Open MPI result would have
+led one to expect.
+
+**It grows with both axes, and node count matters more than size.** 0.94 at
+8 nodes and 64 bytes; 0.50 at 16 nodes and 4 KB. Doubling the node count moved
+the ratio further than the whole 64-byte-to-4-KB payload sweep did.
+
+**The neighbour fetches stay local, which is the claim the whole design rests
+on.** Counted across every daemon with ``pmix_server_verbose 2`` and
+``--leave-session-attached``, a 16-node run whose only gets are of the left and
+right neighbour issues **zero** direct-modex requests under *both* movements.
+The rollup has the data because it broadcast everything; the ring has it
+because that is precisely what it shared. So the ring buys the cheaper fence
+without giving anything back on the gets - which is the entire bargain, and it
+holds.
+
+Caveats, stated rather than buried:
+
+* **Forcing the movement also applies it to barriers**, and there it costs a
+  little: 1039us to 1298us at 16 nodes, the price of two extra one-hop
+  messages carrying a barrier's eight bytes. A deployment wants the ring for
+  the modex and the rollup for barriers, which is an ``auto`` rule, not a
+  forced one - and another reason ``auto`` needs a better discriminator than
+  ``PMIX_COLLECT_DATA``.
+* **The 32-node row exists only for the ring.** The 32-node DVM failed to
+  start at radix 2 during the rollup pass - a known flake of this host, not
+  anything to do with the movement - so there is no pair to compare and it is
+  left out rather than half-reported.
+* **One proc per node.** Real jobs put many ranks on a node, so the bytes a
+  *daemon* contributes are ppn times the per-rank figure, which moves every
+  row further to the right of this table.
+
 **And it is not reachable from ``auto``.** Unlike ``tree`` and ``allgather``,
 this movement changes what a fence *delivers*, not merely how it travels - a
 caller that set ``PMIX_COLLECT_DATA`` does not get the whole modex back. That

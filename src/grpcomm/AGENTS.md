@@ -706,6 +706,24 @@ Three things about the implementation are load-bearing:
   holds its own clients' remote-scope data — it is what it gave us — so
   returning it would be a redundant store of the single largest piece.
 
+**What the ring is betting on, stated plainly.** That a rank's likeliest
+partner is a near-numbered rank, which under any ordinary mapping is on its own
+node or the one next to it. That is why the ring is over the *participant
+daemon list in ascending vpid order* — under `--map-by slot` or `--map-by node`
+adjacent ranks land on the same or adjacent daemons, so rank ±1 is exactly what
+this movement already holds. A mapping that deliberately shuffles rank→node
+order (a rankfile, or `seq` with a scrambled list) breaks the correspondence:
+the fence still works, the neighbour data is still delivered, it is simply no
+longer the data anybody wanted. That is a performance property, not a
+correctness one, and it is the reason this is opt-in.
+
+Note also what the bet is *not*: it is not that applications talk only to
+neighbours. It is that they do not talk to *everybody* — most transports could
+not carry a connection to every peer even if the application asked. An
+all-to-all communication pattern is the outer bound of what this movement costs
+(every peer beyond the ring becomes a direct-modex round trip), not the case it
+is designed against.
+
 The release still arrives, and is still what retires the tracker and completes
 the local clients; it simply carries nothing, and `fence_release()` answers
 from the ring instead. Everything else — the signature, the generation, the
