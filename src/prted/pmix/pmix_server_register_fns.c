@@ -675,6 +675,21 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             if (!PMIX_CHECK_NSPACE(pptr->name.nspace, jdata->nspace)) {
                 continue;
             }
+            /* Publishing an entry for every proc in the job, on every daemon,
+             * builds a table that grows with the total process count on a node
+             * that will only ever run its own slice of it - and most of it is
+             * never asked for.  Everything in that entry is derivable here
+             * from the job object, so when this is on we publish only the
+             * procs we host and let the direct-modex upcall answer for the
+             * rest on demand (see derive_proc_data() in pmix_server_fence.c).
+             * That trades a table proportional to the job for one proportional
+             * to what this node actually runs, plus one local upcall per
+             * remote proc anybody here genuinely asks about - and PMIx caches
+             * that answer, so it is once per proc, not once per query. */
+            if (prte_pmix_server_globals.lazy_procdata &&
+                PRTE_PROC_MY_NAME->rank != node->daemon->name.rank) {
+                continue;
+            }
             /* setup the proc map object */
             PMIX_INFO_LIST_START(pmap);
 
