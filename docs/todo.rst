@@ -106,16 +106,100 @@ goes through the same parser and is not separately covered.
 Performance work not landed
 ---------------------------
 
-**Lazy proc-data registration.**
-``prte_pmix_server_register_nspace`` publishes a PMIx proc-data entry for
-*every* proc in the job on *every* daemon — a table that grows with the whole
-job on a node running a fixed slice of it.  An experimental branch registers
-only the procs a daemon hosts and derives the rest on demand in
-``dmodex_req``.  It is **written but unproven**, and it is stacked on the
-xcast-shared-payload work rather than on a clean master, so it needs a rebase
-before it can even be measured.  The rule it must keep to: switch on what
-PRRTE is the *authority* for (the placement and binding it decided, a closed
-set), never on what an application is expected to ask for.
+**Scatter the launch message's per-proc residual.**  Half of "broadcast the
+maps, scatter the residuals" is done and the other half is not.  Lazy
+proc-data registration has landed (a daemon publishes PMIx proc-data only for
+the procs it hosts, and ``derive_proc_data`` in ``pmix_server_fence.c``
+answers for the rest), and so has sending placement as a node map plus a proc
+map per app.  What still goes to every daemon is a per-proc record of what
+the maps cannot say.
+
+Measured on master with ``prterun --rtos donotlaunch`` and ``--prtemca
+plm_base_verbose 2``, against a PMIx built *without* debug so the packing is
+production-shaped:
+
+===================  =========  ==================
+nodes x ppn          procs      launch message
+===================  =========  ==================
+100 x 8              800        14,592 B
+100 x 128            12,800     203,600 B
+500 x 128            64,000     950,423 B
+1000 x 128           128,000    1,878,828 B
+===================  =========  ==================
+
+About **14.5 B/proc and 18 B/node**, so at a realistic 1000 x 128 the
+per-proc residual is **~99% of the message** — broadcast in full to every
+daemon.  Its composition, from the same shape at three binding policies
+(default 1,878,828 / ``--bind-to core`` 1,516,829 / ``--bind-to none``
+1,114,829): the cpuset is roughly 6 B/proc and the rest is node rank (2),
+state (4) and an attribute count (4).
+
+Four things are settled, and the fourth is the one that stops this being
+obvious:
+
+* **The attribute count is dead weight, always.**  Exactly one proc
+  attribute is set anywhere in the tree — ``PRTE_PROC_NOBARRIER``, in
+  ``odls_base_default_fns.c`` — and it is ``PRTE_ATTR_LOCAL``, which
+  ``prte_proc_pack``'s filter excludes.  The list is empty on the wire in
+  every job, so those 4 B/proc buy nothing at any scale.
+* **The state is not dead, but no daemon reads it for a proc it does not
+  host.**  The odls launch loop gates on ``PRTE_PROC_STATE_INIT`` /
+  ``_RESTART``, so the value distinguishes a fresh launch from a restart and
+  cannot be dropped or hardcoded.  Every other read is of a local child.  It
+  belongs in the scattered slice rather than in the broadcast.  Note
+  ``prte_job_pack`` has a second caller — ``prte_util_encode_job_catchup``,
+  which packs *already-running* jobs for a joining daemon — so "it has not
+  started yet" is not a safe premise.
+* **Locality need not be sent, and is not.**  It is generated from the
+  cpuset by ``PMIx_server_generate_locality_string``.  But that API takes no
+  topology argument: ``pmix_hwloc_generate_locality_string`` walks
+  ``pmix_globals.topology.topology``, the *caller's own*.  So a daemon
+  computing a remote proc's locality is assuming that node's topology matches
+  its own — pre-existing, since the eager registration did it for every proc
+  in the job, and an argument for the scatter rather than against it.
+* **A cpuset dictionary does not work.**  Under a regular mapping the
+  distinct cpusets number ``ppn`` rather than ``nprocs`` (measured: 8 distinct
+  across 800 procs on 100 nodes at ``--bind-to core``, one per local rank), so
+  a dictionary plus a per-proc index looks like it collapses the cost.  It
+  does not generalize: plenty of placement strategies give equal local ranks
+  on different nodes *different* cpusets, and then the distinct count
+  approaches the proc count and dictionary-plus-index is strictly worse than
+  what is there now.  A raw bitmap is also worse, not better — 16 bytes for a
+  128-core node against 9 for the string ``"0-43"``.
+
+So the residual to scatter is the cpuset and the state, and the shape is a
+per-destination payload: job-level fields and maps to everyone as now, each
+daemon receiving only the records for the procs it will fork.
+
+Two things make it tractable, and two make it work:
+
+* Lazy proc-data registration is what makes it *safe*.  Under the maps,
+  ``derive_proc_data`` gets rank, global rank, app rank, appnum, local rank,
+  node id and hostname from the maps alone; a scatter costs it exactly node
+  rank, cpuset and the locality derived from the cpuset, and those fall
+  through to a real direct modex to the daemon that forked the proc — a path
+  that now exists and is exercised by ``contrib/dockerswarm``'s ``peerinfo``.
+* It needs **no new broadcast movement**.  ``prte_rml_get_route`` picks the
+  next hop toward its target, so N routed point-to-point sends aggregate in
+  the tree: bytes leaving the HNP are the sum of the slices rather than the
+  sum replicated, and each hop relays only its subtree's share.
+* **Keep node rank in the broadcast** (2 B/proc) even so.  A remote node-rank
+  get that finds nothing does not fail — it falls through to PMIx's
+  one-job-per-node assumption and returns a *wrong* value.  That is the only
+  silent-wrong-answer risk in the whole change, and 0.26 MB at 1000 x 128
+  buys it away.
+* The cost is a contract change, not a code change.  The launch message stops
+  being one payload delivered identically and becomes common plus
+  per-destination; ``prte_job_pack``/``_unpack`` are hand-written mirrors with
+  no version and nothing catches a half-done edit; the receiver must handle
+  two pieces with an ordering constraint; and an elastic grow needs the
+  joining daemon's slice.
+
+The written-up case is in ``docs/plans/scalable_collectives.rst``, "What a
+client actually asks about a remote peer" — including the scan finding that
+nothing in Open MPI asks a remote proc for ``PMIX_CPUSET`` or
+``PMIX_NODE_RANK``, and that ``PMIX_LOCALITY`` never crosses the wire in
+either direction.
 
 **Small effects cannot be measured end-to-end on the container swarm.**  At
 40 nodes the collect fence's wall clock has a run-to-run coefficient of
