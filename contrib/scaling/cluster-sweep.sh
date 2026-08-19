@@ -63,6 +63,12 @@
 #   * A DVM that came up with fewer nodes than you asked for reports a
 #     perfectly plausible number for the wrong scale.  Every DVM is verified
 #     by counting distinct hostnames before anything is measured.
+#   * "prte --daemonize" tells you nothing about why a DVM did not start: the
+#     child closes stdout and stderr before it launches a daemon, and it has
+#     already written the --report-uri file by then.  A failed launch is
+#     therefore indistinguishable from a healthy DVM until the first job is
+#     refused.  So the DVM is started in the background WITHOUT --daemonize
+#     and is not considered up until it says "DVM ready".
 #   * A run whose client failed still prints timings for the phases that did
 #     run.  Rows are only recorded when the client reported every phase.
 #   * The absolute numbers depend on the build.  --enable-debug roughly
@@ -316,6 +322,8 @@ preflight() {
 # ---------------------------------------------------------------------------
 
 URI=""
+DVM_LOG=""
+DVM_PID=""
 DVM_UP=0
 
 hostspec() {   # <nodes> <slots>
@@ -324,29 +332,59 @@ hostspec() {   # <nodes> <slots>
     echo "$out"
 }
 
+# We deliberately do NOT use --daemonize here, even though this is exactly the
+# persistent DVM it is meant for.  Two things about it make a failure to start
+# undiagnosable:
+#
+#   * the daemonized child points its stdout and stderr at /dev/null before it
+#     launches a single daemon, so whatever prte has to say about why the DVM
+#     did not come up is discarded -- redirecting the command does not help,
+#     because the redirection is undone in the child;
+#   * the URI file is written by the PMIx server at init, long before any
+#     daemon has reported, so its existence proves only that the HNP started.
+#
+# Together those turn "prte could not launch the daemons" into a DVM that
+# looks up, answers nothing, and gets reported as a mapping problem.  Run it
+# in the background instead and wait for the "DVM ready" it prints once every
+# daemon has checked in: then success is a positive statement, and a failure
+# leaves its reason in a log we can show the user.
 dvm_start() {  # <nodes> <slots> <radix> <extra mca...>
     local n=$1 slots=$2 radix=$3; shift 3
     local extra="$*" tries seen
 
     URI="$outdir/dvm.uri"
+    DVM_LOG="$outdir/dvm.log"
     rm -f "$URI"
+    : > "$DVM_LOG"
     # shellcheck disable=SC2086
-    prte --daemonize --report-uri "$URI" \
+    prte --report-uri "$URI" \
          --prtemca rml_base_radix "$radix" $extra \
-         --host "$(hostspec "$n" "$slots")" >> "$LOG" 2>&1
+         --host "$(hostspec "$n" "$slots")" < /dev/null > "$DVM_LOG" 2>&1 &
+    DVM_PID=$!
 
     for ((tries = 0; tries < dvm_timeout; tries++)); do
-        [ -s "$URI" ] && break
+        grep -q "DVM ready" "$DVM_LOG" 2>/dev/null && break
+        kill -0 "$DVM_PID" 2>/dev/null || break      # it died -- stop waiting
         sleep 1
     done
-    [ -s "$URI" ] || { echo "    DVM never reported a URI" >&2; return 1; }
+    if ! grep -q "DVM ready" "$DVM_LOG" 2>/dev/null; then
+        echo "    DVM did not start -- prte said:" >&2
+        sed -n '1,12p' "$DVM_LOG" >&2
+        cat "$DVM_LOG" >> "$LOG"
+        dvm_stop
+        return 1
+    fi
+    cat "$DVM_LOG" >> "$LOG"
+    [ -s "$URI" ] || { echo "    DVM never reported a URI" >&2; dvm_stop; return 1; }
 
     # A DVM that came up short reports a believable number for the wrong
     # scale, so count the daemons that actually answer before measuring.
-    seen=$($TIMEOUT 120 prun --dvm-uri "file:$URI" --map-by ppr:1:node -n "$n" hostname 2>/dev/null \
+    # prun's stderr goes to the log, not down the pipe: it must not be
+    # counted as a node, and it is the only explanation we will get.
+    seen=$($TIMEOUT 120 prun --dvm-uri "file:$URI" --map-by ppr:1:node -n "$n" hostname 2>>"$LOG" \
            | sort -u | grep -c . || true)
     if [ "${seen:-0}" -ne "$n" ]; then
-        echo "    DVM came up with ${seen:-0} of $n nodes -- skipping" >&2
+        echo "    DVM answered for ${seen:-0} of $n nodes -- skipping (see $LOG)" >&2
         dvm_stop
         return 1
     fi
@@ -355,7 +393,19 @@ dvm_start() {  # <nodes> <slots> <radix> <extra mca...>
 }
 
 dvm_stop() {
+    local w
     [ -n "$URI" ] && [ -s "$URI" ] && $TIMEOUT 60 pterm --dvm-uri "file:$URI" >> "$LOG" 2>&1
+    # The DVM is our child now, so reap it -- and make sure it is really gone
+    # before the next cycle starts another one on the same nodes.
+    if [ -n "$DVM_PID" ]; then
+        for ((w = 0; w < 30; w++)); do
+            kill -0 "$DVM_PID" 2>/dev/null || break
+            sleep 1
+        done
+        kill -0 "$DVM_PID" 2>/dev/null && kill -TERM "$DVM_PID" 2>/dev/null
+        wait "$DVM_PID" 2>/dev/null || true
+        DVM_PID=""
+    fi
     DVM_UP=0
     rm -f "$URI"
 }
