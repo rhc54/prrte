@@ -15,5 +15,6 @@ find information on that subject here.
    publish-lookup.rst
    schedulers/index.rst
    state_machine.rst
+   tools.rst
    rml/index.rst
    pmix2_vs_pmix.rst
